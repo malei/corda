@@ -6,6 +6,7 @@ import net.corda.core.contracts.TransactionType
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.core.transactions.TransactionBuilder
 import java.security.PublicKey
 
@@ -15,12 +16,14 @@ import java.security.PublicKey
  * TODO: Merge with the existing demo IRS code.
  */
 data class IRSState(val swap: SwapData,
-                    val buyer: Party,
-                    val seller: Party,
+                    val buyer: StateParty,
+                    val seller: StateParty,
                     override val contract: OGTrade,
                     override val linearId: UniqueIdentifier = UniqueIdentifier(swap.id.first + swap.id.second)) : DealState {
+    constructor(swap: SwapData, buyer: Party, seller: Party, contract: OGTrade)
+        : this(swap, buyer.toState(), seller.toState(), contract)
     override val ref: String = linearId.externalId!! // Same as the constructor for UniqueIdentified
-    override val parties: List<Party> get() = listOf(buyer, seller)
+    override val parties: List<StateParty> get() = listOf(buyer, seller)
 
     override fun isRelevant(ourKeys: Set<PublicKey>): Boolean {
         return parties.flatMap { it.owningKey.keys }.intersect(ourKeys).isNotEmpty()

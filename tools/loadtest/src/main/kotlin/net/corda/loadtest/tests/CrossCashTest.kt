@@ -7,6 +7,7 @@ import net.corda.core.contracts.Issued
 import net.corda.core.contracts.PartyAndReference
 import net.corda.core.contracts.USD
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.core.messaging.startFlow
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.flows.CashCommand
@@ -48,7 +49,7 @@ data class CrossCashCommand(
  * Map from node to (map from issuer to USD quantity)
  */
 data class CrossCashState(
-        val nodeVaults: Map<Party, Map<Party, Long>>,
+        val nodeVaults: Map<StateParty, Map<StateParty, Long>>,
 
         // node -> (notifying node -> [(issuer, amount)])
         // This map holds the queues that encode the non-determinism of how tx notifications arrive in the background.
@@ -66,20 +67,20 @@ data class CrossCashState(
         // requires more concurrent code which is conceptually also more complex than the current design.
         // TODO: Alternative: We may possibly reduce the complexity of the search even further using some form of
         //     knapsack instead of the naive search
-        val diffQueues: Map<Party, Map<Party, List<Pair<Party, Long>>>>
+        val diffQueues: Map<StateParty, Map<StateParty, List<Pair<StateParty, Long>>>>
 ) {
-    fun copyVaults(): HashMap<Party, HashMap<Party, Long>> {
-        val newNodeVaults = HashMap<Party, HashMap<Party, Long>>()
+    fun copyVaults(): HashMap<StateParty, HashMap<StateParty, Long>> {
+        val newNodeVaults = HashMap<StateParty, HashMap<StateParty, Long>>()
         for ((key, value) in nodeVaults) {
             newNodeVaults[key] = HashMap(value)
         }
         return newNodeVaults
     }
 
-    fun copyQueues(): HashMap<Party, HashMap<Party, ArrayList<Pair<Party, Long>>>> {
-        val newDiffQueues = HashMap<Party, HashMap<Party, ArrayList<Pair<Party, Long>>>>()
+    fun copyQueues(): HashMap<StateParty, HashMap<StateParty, ArrayList<Pair<StateParty, Long>>>> {
+        val newDiffQueues = HashMap<StateParty, HashMap<StateParty, ArrayList<Pair<StateParty, Long>>>>()
         for ((node, queues) in diffQueues) {
-            val newQueues = HashMap<Party, ArrayList<Pair<Party, Long>>>()
+            val newQueues = HashMap<StateParty, ArrayList<Pair<StateParty, Long>>>()
             for ((sender, value) in queues) {
                 newQueues[sender] = ArrayList(value)
             }
@@ -120,13 +121,13 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
             Generator.pickN(parallelism, simpleNodes).bind { nodes ->
                 Generator.sequence(
                         nodes.map { node ->
-                            val quantities = state.nodeVaults[node.info.legalIdentity] ?: mapOf()
+                            val quantities = state.nodeVaults[node.info.legalIdentity.toState()] ?: mapOf()
                             val possibleRecipients = nodeMap.keys.toList()
                             val moves = quantities.map {
                                 it.value.toDouble() / 1000 to generateMove(it.value, USD, it.key, possibleRecipients)
                             }
                             val exits = quantities.mapNotNull {
-                                if (it.key == node.info.legalIdentity) {
+                                if (it.key.owningKey == node.info.legalIdentity.owningKey) {
                                     it.value.toDouble() / 3000 to generateExit(it.value, USD)
                                 } else {
                                     null
@@ -146,7 +147,7 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
                 is CashCommand.IssueCash -> {
                     val newDiffQueues = state.copyQueues()
                     val originators = newDiffQueues.getOrPut(command.command.recipient, { HashMap() })
-                    val issuer = command.node.info.legalIdentity
+                    val issuer = command.node.info.legalIdentity.toState()
                     val quantity = command.command.amount.quantity
                     val originator = issuer
                     val queue = originators.getOrPut(originator, { ArrayList() })
@@ -157,10 +158,10 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
                     val newNodeVaults = state.copyVaults()
                     val newDiffQueues = state.copyQueues()
                     val recipientOriginators = newDiffQueues.getOrPut(command.command.recipient, { HashMap() })
-                    val senderQuantities = newNodeVaults[command.node.info.legalIdentity]!!
+                    val senderQuantities = newNodeVaults[command.node.info.legalIdentity.toState()]!!
                     val quantity = command.command.amount.quantity
                     val issuer = command.command.amount.token.issuer.party
-                    val originator = command.node.info.legalIdentity
+                    val originator = command.node.info.legalIdentity.toState()
                     val senderQuantity = senderQuantities[issuer] ?: throw Exception(
                             "Generated payment of ${command.command.amount} from ${command.node.info.legalIdentity}, " +
                                     "however there is no cash from $issuer!"
@@ -182,7 +183,7 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
                 }
                 is CashCommand.ExitCash -> {
                     val newNodeVaults = state.copyVaults()
-                    val issuer = command.node.info.legalIdentity
+                    val issuer = command.node.info.legalIdentity.toState()
                     val quantity = command.command.amount.quantity
                     val issuerQuantities = newNodeVaults[issuer]!!
                     val issuerQuantity = issuerQuantities[issuer] ?: throw Exception(
@@ -218,9 +219,9 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
 
         gatherRemoteState = { previousState ->
             log.info("Reifying state...")
-            val currentNodeVaults = HashMap<Party, HashMap<Party, Long>>()
+            val currentNodeVaults = HashMap<StateParty, HashMap<StateParty, Long>>()
             simpleNodes.forEach {
-                val quantities = HashMap<Party, Long>()
+                val quantities = HashMap<StateParty, Long>()
                 val vault = it.connection.proxy.vaultAndUpdates().first
                 vault.forEach {
                     val state = it.state.data
@@ -229,10 +230,10 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
                         quantities.put(issuer, (quantities[issuer] ?: 0L) + state.amount.quantity)
                     }
                 }
-                currentNodeVaults.put(it.info.legalIdentity, quantities)
+                currentNodeVaults.put(it.info.legalIdentity.toState(), quantities)
             }
             val (consistentVaults, diffQueues) = if (previousState == null) {
-                Pair(currentNodeVaults, mapOf<Party, Map<Party, List<Pair<Party, Long>>>>())
+                Pair(currentNodeVaults, mapOf<StateParty, Map<StateParty, List<Pair<StateParty, Long>>>>())
             } else {
                 log.info("${previousState.diffQueues.values.sumBy { it.values.sumBy { it.size } }} txs in limbo")
                 val newDiffQueues = previousState.copyQueues()
@@ -250,12 +251,12 @@ val crossCashTest = LoadTest<CrossCashCommand, CrossCashState>(
                                             "\nActual gathered state:\n${CrossCashState(currentNodeVaults, mapOf())}"
                             )
                             // TODO We should terminate here with an exception, we cannot carry on as we have an inconsistent model. We carry on currently because we always diverge due to notarisation failures
-                            return@LoadTest CrossCashState(currentNodeVaults, mapOf<Party, Map<Party, List<Pair<Party, Long>>>>())
+                            return@LoadTest CrossCashState(currentNodeVaults, mapOf<StateParty, Map<StateParty, List<Pair<StateParty, Long>>>>())
                         }
                         if (matches.size > 1) {
                             log.warn("Multiple predicted states match the remote state")
                         }
-                        val minimumMatches = matches.fold<Map<Party, Int>, HashMap<Party, Int>?>(null) { minimum, next ->
+                        val minimumMatches = matches.fold<Map<StateParty, Int>, HashMap<StateParty, Int>?>(null) { minimum, next ->
                             if (minimum == null) {
                                 HashMap(next)
                             } else {

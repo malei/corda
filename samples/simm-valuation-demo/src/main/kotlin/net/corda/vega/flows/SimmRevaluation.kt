@@ -19,8 +19,9 @@ object SimmRevaluation {
             val curState = stateAndRef.state.data
             val myIdentity = serviceHub.myInfo.legalIdentity
             if (myIdentity.name == curState.parties[0].name) {
-                val otherParty = curState.parties[1]
-                subFlow(SimmFlow.Requester(otherParty, valuationDate, stateAndRef))
+                val otherParty = curState.parties[1].resolveParty(serviceHub.identityService)
+                require (otherParty != null) { "Other party must be known by this node" }
+                subFlow(SimmFlow.Requester(otherParty!!, valuationDate, stateAndRef))
             }
         }
     }

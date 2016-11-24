@@ -4,6 +4,7 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.contracts.asset.Cash
 import net.corda.core.contracts.*
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.core.crypto.keys
 import net.corda.core.crypto.toStringShort
 import net.corda.core.flows.FlowLogic
@@ -45,10 +46,12 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
     private fun initiatePayment(req: CashCommand.PayCash): CashFlowResult {
         progressTracker.currentStep = PAYING
         val builder: TransactionBuilder = TransactionType.General.Builder(null)
+        val recipient = req.recipient.resolveParty(serviceHub.identityService) ?: return CashFlowResult.Failed("Unknown recipient party")
+        val issuer = req.amount.token.issuer.party.resolveParty(serviceHub.identityService) ?: return CashFlowResult.Failed("Unknown issuing party")
         // TODO: Have some way of restricting this to states the caller controls
         try {
             val (spendTX, keysForSigning) = serviceHub.vaultService.generateSpend(builder,
-                    req.amount.withoutIssuer(), req.recipient.owningKey, setOf(req.amount.token.issuer.party))
+                    req.amount.withoutIssuer(), req.recipient.owningKey, setOf(issuer))
 
             keysForSigning.keys.forEach {
                 val key = serviceHub.keyManagementService.keys[it] ?: throw IllegalStateException("Could not find signing key for ${it.toStringShort()}")
@@ -56,7 +59,7 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
             }
 
             val tx = spendTX.toSignedTransaction(checkSufficientSignatures = false)
-            val flow = FinalityFlow(tx, setOf(req.recipient))
+            val flow = FinalityFlow(tx, setOf(recipient))
             subFlow(flow)
             return CashFlowResult.Success(
                     stateMachine.id,
@@ -73,7 +76,7 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
         progressTracker.currentStep = EXITING
         val builder: TransactionBuilder = TransactionType.General.Builder(null)
         try {
-            val issuer = PartyAndReference(serviceHub.myInfo.legalIdentity, req.issueRef)
+            val issuer = PartyAndReference(serviceHub.myInfo.legalIdentity.toState(), req.issueRef)
             Cash().generateExit(builder, req.amount.issuedBy(issuer),
                     serviceHub.vaultService.currentVault.statesOfType<Cash.State>().filter { it.state.data.owner == issuer.party.owningKey })
             val myKey = serviceHub.legalIdentityKey
@@ -108,13 +111,14 @@ class CashFlow(val command: CashCommand, override val progressTracker: ProgressT
     private fun issueCash(req: CashCommand.IssueCash): CashFlowResult {
         progressTracker.currentStep = ISSUING
         val builder: TransactionBuilder = TransactionType.General.Builder(notary = null)
-        val issuer = PartyAndReference(serviceHub.myInfo.legalIdentity, req.issueRef)
+        val issuer = PartyAndReference(serviceHub.myInfo.legalIdentity.toState(), req.issueRef)
+        val recipient = req.recipient.resolveParty(serviceHub.identityService) ?: return CashFlowResult.Failed("Unknown recipient party")
         Cash().generateIssue(builder, req.amount.issuedBy(issuer), req.recipient.owningKey, req.notary)
         val myKey = serviceHub.legalIdentityKey
         builder.signWith(myKey)
         val tx = builder.toSignedTransaction(checkSufficientSignatures = true)
         // Issuance transactions do not need to be notarised, so we can skip directly to broadcasting it
-        subFlow(BroadcastTransactionFlow(tx, setOf(req.recipient)))
+        subFlow(BroadcastTransactionFlow(tx, setOf(recipient)))
         return CashFlowResult.Success(
                 stateMachine.id,
                 tx,
@@ -138,8 +142,13 @@ sealed class CashCommand {
      */
     class IssueCash(val amount: Amount<Currency>,
                     val issueRef: OpaqueBytes,
-                    val recipient: Party,
-                    val notary: Party) : CashCommand()
+                    val recipient: StateParty,
+                    val notary: Party) : CashCommand() {
+        constructor(amount: Amount<Currency>,
+                    issueRef: OpaqueBytes,
+                    recipient: Party,
+                    notary: Party) : this(amount, issueRef, recipient.toState(), notary)
+    }
 
     /**
      * Pay cash to someone else.
@@ -147,7 +156,9 @@ sealed class CashCommand {
      * @param amount the amount of currency to issue on to the ledger.
      * @param recipient the party to issue the cash to.
      */
-    class PayCash(val amount: Amount<Issued<Currency>>, val recipient: Party) : CashCommand()
+    class PayCash(val amount: Amount<Issued<Currency>>, val recipient: StateParty) : CashCommand() {
+        constructor(amount: Amount<Issued<Currency>>, recipient: Party) : this(amount, recipient.toState())
+    }
 
     /**
      * Exit cash from the ledger.

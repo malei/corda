@@ -6,6 +6,7 @@ import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.filterStatesOfType
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.startFlow
 import net.corda.vega.analytics.InitialMarginTriple
@@ -32,7 +33,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     private val ownParty: Party get() = rpc.nodeIdentity().legalIdentity
     private val portfolioUtils = PortfolioApiUtils(ownParty)
 
-    private inline fun <reified T : DealState> dealsWith(party: Party): List<StateAndRef<T>> {
+    private inline fun <reified T : DealState> dealsWith(party: StateParty): List<StateAndRef<T>> {
         return rpc.vaultAndUpdates().first.filterStatesOfType<T>().filter { it.state.data.parties.any { it == party } }
     }
 
@@ -53,7 +54,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
      * DSL to get a portfolio and then executing the passed function with the portfolio as a parameter.
      * Used as such: withPortfolio(party) { doSomethingWith(it) }
      */
-    private fun withPortfolio(party: Party, func: (PortfolioState) -> Response): Response {
+    private fun withPortfolio(party: StateParty, func: (PortfolioState) -> Response): Response {
         val portfolio = getPortfolioWith(party)
         return if (portfolio != null) {
             func(portfolio)
@@ -65,12 +66,12 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     /**
      * Gets all existing IRSStates with the party provided.
      */
-    private fun getTradesWith(party: Party) = dealsWith<IRSState>(party)
+    private fun getTradesWith(party: StateParty) = dealsWith<IRSState>(party)
 
     /**
      * Gets the most recent portfolio state, or null if not extant, with the party provided.
      */
-    private fun getPortfolioWith(party: Party): PortfolioState? {
+    private fun getPortfolioWith(party: StateParty): PortfolioState? {
         val portfolios = dealsWith<PortfolioState>(party)
         // Can have at most one between any two parties with the current no split portfolio model
         require(portfolios.size < 2) { "This API currently only supports one portfolio with a counterparty" }
@@ -82,7 +83,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
      *
      * @warning Do not call if you have not agreed a portfolio with the other party.
      */
-    private fun getPortfolioStateAndRefWith(party: Party): StateAndRef<PortfolioState> {
+    private fun getPortfolioStateAndRefWith(party: StateParty): StateAndRef<PortfolioState> {
         val portfolios = dealsWith<PortfolioState>(party)
         // Can have at most one between any two parties with the current no split portfolio model
         require(portfolios.size < 2) { "This API currently only supports one portfolio with a counterparty" }
@@ -111,14 +112,15 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Path("{party}/trades")
     @Produces(MediaType.APPLICATION_JSON)
     fun getPartyTrades(@PathParam("party") partyName: String): Response {
-        return withParty(partyName) {
-            val states = dealsWith<IRSState>(it)
+        return withParty(partyName) { party ->
+            val stateParty = party.toState()
+            val states = dealsWith<IRSState>(stateParty)
             val latestPortfolioStateRef: StateAndRef<PortfolioState>
             var latestPortfolioStateData: PortfolioState? = null
             var PVs: Map<String, MultiCurrencyAmount>? = null
             var IMs: Map<String, InitialMarginTriple>? = null
-            if (dealsWith<PortfolioState>(it).isNotEmpty()) {
-                latestPortfolioStateRef = dealsWith<PortfolioState>(it).last()
+            if (dealsWith<PortfolioState>(stateParty).isNotEmpty()) {
+                latestPortfolioStateRef = dealsWith<PortfolioState>(stateParty).last()
                 latestPortfolioStateData = latestPortfolioStateRef.state.data
                 PVs = latestPortfolioStateData.valuation?.presentValues
                 IMs = latestPortfolioStateData.valuation?.imContributionMap
@@ -142,8 +144,8 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Path("{party}/trades/{tradeId}")
     @Produces(MediaType.APPLICATION_JSON)
     fun getPartyTrade(@PathParam("party") partyName: String, @PathParam("tradeId") tradeId: String): Response {
-        return withParty(partyName) {
-            val states = dealsWith<IRSState>(it)
+        return withParty(partyName) { party ->
+            val states = dealsWith<IRSState>(party.toState())
             val tradeState = states.first { it.state.data.swap.id.second == tradeId }.state.data
             Response.ok().entity(portfolioUtils.createTradeView(tradeState)).build()
         }
@@ -174,7 +176,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Produces(MediaType.APPLICATION_JSON)
     fun getPartyPortfolioValuations(@PathParam("party") partyName: String): Response {
         return withParty(partyName) { otherParty ->
-            withPortfolio(otherParty) { portfolioState ->
+            withPortfolio(otherParty.toState()) { portfolioState ->
                 val portfolio = portfolioState.portfolio.toStateAndRef<IRSState>(rpc).toPortfolio()
                 Response.ok().entity(portfolioUtils.createValuations(portfolioState, portfolio)).build()
             }
@@ -191,7 +193,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Produces(MediaType.APPLICATION_JSON)
     fun getPortfolioSummary(@PathParam("party") partyName: String): Response {
         return withParty(partyName) { party ->
-            val trades = getTradesWith(party)
+            val trades = getTradesWith(party.toState())
             val portfolio = Portfolio(trades)
             val summary = mapOf(
                     "trades" to portfolio.trades.size,
@@ -217,7 +219,7 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Produces(MediaType.APPLICATION_JSON)
     fun getPartyPortfolioHistoryAggregated(@PathParam("party") partyName: String): Response {
         return withParty(partyName) { party ->
-            withPortfolio(party) { state ->
+            withPortfolio(party.toState()) { state ->
                 if (state.valuation != null) {
                     val isValuer = state.valuer.name == ownParty.name
                     val rawMtm = state.valuation.presentValues.map {
@@ -265,15 +267,16 @@ class PortfolioApi(val rpc: CordaRPCOps) {
     @Produces(MediaType.APPLICATION_JSON)
     fun startPortfolioCalculations(params: ValuationCreationParams = ValuationCreationParams(LocalDate.of(2016, 6, 6)), @PathParam("party") partyName: String): Response {
         return withParty(partyName) { otherParty ->
-            val existingSwap = getPortfolioWith(otherParty)
+            val otherStateParty = otherParty.toState()
+            val existingSwap = getPortfolioWith(otherStateParty)
             if (existingSwap == null) {
                 rpc.startFlow(SimmFlow::Requester, otherParty, params.valuationDate).returnValue.toBlocking().first()
             } else {
-                val handle = rpc.startFlow(SimmRevaluation::Initiator, getPortfolioStateAndRefWith(otherParty).ref, params.valuationDate)
+                val handle = rpc.startFlow(SimmRevaluation::Initiator, getPortfolioStateAndRefWith(otherStateParty).ref, params.valuationDate)
                 handle.returnValue.toBlocking().first()
             }
 
-            withPortfolio(otherParty) { portfolioState ->
+            withPortfolio(otherStateParty) { portfolioState ->
                 val portfolio = portfolioState.portfolio.toStateAndRef<IRSState>(rpc).toPortfolio()
                 Response.ok().entity(portfolioUtils.createValuations(portfolioState, portfolio)).build()
             }

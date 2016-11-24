@@ -23,6 +23,7 @@ import net.corda.core.contracts.Amount
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.withoutIssuer
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.explorer.formatters.AmountFormatter
 import net.corda.explorer.identicon.identicon
 import net.corda.explorer.identicon.identiconToolTip
@@ -84,7 +85,7 @@ class CashViewer : CordaView("Cash") {
      */
     sealed class ViewerNode(val equivAmount: ObservableValue<out Amount<Currency>>,
                             val states: ObservableList<StateAndRef<Cash.State>>) {
-        class IssuerNode(val issuer: Party,
+        class IssuerNode(val issuer: StateParty,
                          sumEquivAmount: ObservableValue<out Amount<Currency>>,
                          states: ObservableList<StateAndRef<Cash.State>>) : ViewerNode(sumEquivAmount, states)
 

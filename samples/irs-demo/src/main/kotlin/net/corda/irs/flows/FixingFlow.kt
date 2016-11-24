@@ -5,6 +5,7 @@ import net.corda.core.TransientProperty
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.core.flows.FlowLogic
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.PluginServiceHub
@@ -144,6 +145,8 @@ object FixingFlow {
             val dealToFix = serviceHub.loadState(ref)
             val fixableDeal = (dealToFix.data as FixableDealState)
             val parties = fixableDeal.parties.filter { it.owningKey != serviceHub.myInfo.legalIdentity.owningKey }
+                    .map { it.resolveParty(serviceHub.identityService) }
+                    .requireNoNulls()
             if (parties.isNotEmpty()) {
                 val fixing = FixingSession(ref, fixableDeal.oracleType)
                 // Start the Floater which will then kick-off the Fixer

@@ -89,6 +89,7 @@ class Cash : OnLedgerAsset<Currency, Cash.Commands, Cash.State>() {
 
         override val exitKeys = setOf(owner, amount.token.issuer.party.owningKey)
         override val contract = CASH_PROGRAM_ID
+        override val partiesToResolve: Collection<StateParty> = listOf(amount.token.issuer.party)
         override val participants = listOf(owner)
 
         override fun move(newAmount: Amount<Issued<Currency>>, newOwner: CompositeKey): FungibleAsset<Currency>
@@ -192,7 +193,7 @@ fun Iterable<ContractState>.sumCashOrZero(currency: Issued<Currency>): Amount<Is
 }
 
 fun Cash.State.ownedBy(owner: CompositeKey) = copy(owner = owner)
-fun Cash.State.issuedBy(party: Party) = copy(amount = Amount(amount.quantity, amount.token.copy(issuer = amount.token.issuer.copy(party = party))))
+fun Cash.State.issuedBy(party: Party) = copy(amount = Amount(amount.quantity, amount.token.copy(issuer = amount.token.issuer.copy(party = party.toState()))))
 fun Cash.State.issuedBy(deposit: PartyAndReference) = copy(amount = Amount(amount.quantity, amount.token.copy(issuer = deposit)))
 fun Cash.State.withDeposit(deposit: PartyAndReference): Cash.State = copy(amount = amount.copy(token = amount.token.copy(issuer = deposit)))
 

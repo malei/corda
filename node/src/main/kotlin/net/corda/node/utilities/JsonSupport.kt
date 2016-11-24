@@ -38,6 +38,8 @@ object JsonSupport {
         SimpleModule("core").apply {
             addSerializer(Party::class.java, PartySerializer)
             addDeserializer(Party::class.java, PartyDeserializer)
+            addSerializer(StateParty::class.java, StatePartySerializer)
+            addDeserializer(StateParty::class.java, StatePartyDeserializer)
             addSerializer(BigDecimal::class.java, ToStringSerializer)
             addDeserializer(BigDecimal::class.java, NumberDeserializers.BigDecimalDeserializer())
             addSerializer(SecureHash::class.java, SecureHashSerializer)
@@ -111,6 +113,23 @@ object JsonSupport {
             val mapper = parser.codec as ServiceHubObjectMapper
             // TODO this needs to use some industry identifier(s) not just these human readable names
             return mapper.identities.partyFromName(parser.text) ?: throw JsonParseException(parser, "Could not find a Party with name: ${parser.text}")
+        }
+    }
+
+    object StatePartySerializer : JsonSerializer<StateParty>() {
+        override fun serialize(obj: StateParty, generator: JsonGenerator, provider: SerializerProvider) {
+            generator.writeString(obj.name)
+        }
+    }
+
+    object StatePartyDeserializer : JsonDeserializer<StateParty>() {
+        override fun deserialize(parser: JsonParser, context: DeserializationContext): StateParty {
+            if (parser.currentToken == JsonToken.FIELD_NAME) {
+                parser.nextToken()
+            }
+            val mapper = parser.codec as ServiceHubObjectMapper
+            // TODO this needs to use some industry identifier(s) not just these human readable names
+            return mapper.identities.partyFromName(parser.text)?.toState() ?: throw JsonParseException(parser, "Could not find a Party with key: ${parser.text}")
         }
     }
 

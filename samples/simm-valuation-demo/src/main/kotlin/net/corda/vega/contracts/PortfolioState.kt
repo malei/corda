@@ -3,6 +3,7 @@ package net.corda.vega.contracts
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.core.flows.FlowLogicRefFactory
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.vega.flows.SimmRevaluation
@@ -17,16 +18,20 @@ import java.time.temporal.ChronoUnit
  */
 data class PortfolioState(val portfolio: List<StateRef>,
                           override val contract: PortfolioSwap,
-                          private val _parties: Pair<Party, Party>,
+                          private val _parties: Pair<StateParty, StateParty>,
                           val valuationDate: LocalDate,
                           val valuation: PortfolioValuation? = null,
                           override val linearId: UniqueIdentifier = UniqueIdentifier())
     : RevisionedState<PortfolioState.Update>, SchedulableState, DealState {
+    constructor(portfolio: List<StateRef>, contract: PortfolioSwap,
+                parties: Pair<Party, Party>, valuationDate: LocalDate, valuation: PortfolioValuation? = null)
+        : this(portfolio, contract, Pair(parties.first.toState(), parties.second.toState()),
+            valuationDate, valuation)
     data class Update(val portfolio: List<StateRef>? = null, val valuation: PortfolioValuation? = null)
 
-    override val parties: List<Party> get() = _parties.toList()
+    override val parties: List<StateParty> get() = _parties.toList()
     override val ref: String = linearId.toString()
-    val valuer: Party get() = parties[0]
+    val valuer: StateParty get() = parties[0]
 
     override val participants: List<CompositeKey>
         get() = parties.map { it.owningKey }

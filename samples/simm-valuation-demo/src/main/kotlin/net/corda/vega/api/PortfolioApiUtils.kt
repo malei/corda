@@ -130,7 +130,7 @@ class PortfolioApiUtils(private val ownParty: Party) {
 
         return TradeView(
                 fixedLeg = mapOf(
-                        "fixedRatePayer" to state.buyer.name,
+                        "fixedRatePayer" to state.buyer.owningKey.toBase58String(),
                         "notional" to mapOf(
                                 "token" to fixedLeg.currency.code,
                                 "quantity" to fixedLeg.notionalSchedule.amount.initialValue
@@ -146,7 +146,7 @@ class PortfolioApiUtils(private val ownParty: Party) {
                         "paymentCalendar" to mapOf<String, Any>() // TODO
                 ),
                 floatingLeg = mapOf(
-                        "floatingRatePayer" to state.seller.name,
+                        "floatingRatePayer" to state.seller.owningKey.toBase58String(),
                         "notional" to mapOf(
                                 "token" to floatingLeg.currency.code,
                                 "quantity" to floatingLeg.notionalSchedule.amount.initialValue

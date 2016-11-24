@@ -89,9 +89,10 @@ class NewTransaction : Fragment() {
             runAsync {
                 if (it is CashCommand.IssueCash) {
                     myIdentity.value?.let { myIdentity ->
+                        val resolvedRecipient = it.recipient.resolveParty(rpcProxy.value!!)!!
                         rpcProxy.value!!.startFlow(::IssuanceRequester,
                                 it.amount,
-                                it.recipient,
+                                resolvedRecipient,
                                 it.issueRef,
                                 myIdentity.legalIdentity).returnValue.toBlocking().first()
                     }
@@ -195,7 +196,7 @@ class NewTransaction : Fragment() {
         )
         availableAmount.textProperty()
                 .bind(Bindings.createStringBinding({
-                    val filteredCash = cash.filtered { it.token.issuer.party == issuer.value && it.token.product == currencyChoiceBox.value }
+                    val filteredCash = cash.filtered { it.token.issuer.party.owningKey == issuer.value?.owningKey && it.token.product == currencyChoiceBox.value }
                             .map { it.withoutIssuer().quantity }
                     "${filteredCash.sum()} ${currencyChoiceBox.value?.currencyCode} Available"
                 }, arrayOf(currencyChoiceBox.valueProperty(), issuerChoiceBox.valueProperty())))

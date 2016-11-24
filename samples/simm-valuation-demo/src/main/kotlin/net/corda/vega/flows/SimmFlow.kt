@@ -13,6 +13,7 @@ import com.opengamma.strata.pricer.swap.DiscountingSwapProductPricer
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.StateRef
 import net.corda.core.crypto.Party
+import net.corda.core.crypto.StateParty
 import net.corda.core.flows.FlowLogic
 import net.corda.core.messaging.Ack
 import net.corda.core.node.PluginServiceHub
@@ -99,8 +100,9 @@ object SimmFlow {
             logger.info("Agreeing valuations")
             val state = stateRef.state.data
             val portfolio = state.portfolio.toStateAndRef<IRSState>(serviceHub).toPortfolio()
-            val valuer = state.valuer
-            val valuation = agreeValuation(portfolio, valuationDate, valuer)
+            val valuer = state.valuer.resolveParty(serviceHub.identityService)
+            require(valuer != null) { "Valuer party must be known to this node" }
+            val valuation = agreeValuation(portfolio, valuationDate, valuer!!)
             val update = PortfolioState.Update(valuation = valuation)
             return subFlow(StateRevisionFlow.Requester(stateRef, update), shareParentSessions = true).state.data
         }
@@ -208,6 +210,13 @@ object SimmFlow {
         private fun agree(data: Any): Boolean {
             send(replyToParty, data)
             return receive<Boolean>(replyToParty).unwrap { it == true }
+        }
+
+        @Suspendable
+        private fun agreeValuation(portfolio: Portfolio, asOf: LocalDate, valuer: StateParty): PortfolioValuation {
+            val valuerParty = valuer.resolveParty(serviceHub.identityService)
+            require(valuerParty != null)
+            return agreeValuation(portfolio, asOf, valuerParty!!)
         }
 
         /**

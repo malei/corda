@@ -24,8 +24,9 @@ data class Party(val name: String, val owningKey: CompositeKey) {
     /** A helper constructor that converts the given [PublicKey] in to a [CompositeKey] with a single node */
     constructor(name: String, owningKey: PublicKey) : this(name, owningKey.composite)
 
+    fun toState() = StateParty(owningKey, this)
     override fun toString() = name
 
-    fun ref(bytes: OpaqueBytes) = PartyAndReference(this, bytes)
+    fun ref(bytes: OpaqueBytes) = PartyAndReference(this.toState(), bytes)
     fun ref(vararg bytes: Byte) = ref(OpaqueBytes.of(*bytes))
 }

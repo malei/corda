@@ -88,6 +88,10 @@ class WireTransaction(
             services.storageService.attachments.openAttachment(it) ?: throw FileNotFoundException(it.toString())
         }
         val resolvedInputs = inputs.map { StateAndRef(services.loadState(it), it) }
+        // Resolve identities in each state, where possible
+        val identityService = services.identityService
+        resolvedInputs.forEach { input -> input.state.data.partiesToResolve.forEach { it.resolveParty(identityService) } }
+        outputs.forEach { output -> output.data.partiesToResolve.forEach { it.resolveParty(identityService) } }
         return LedgerTransaction(resolvedInputs, outputs, authenticatedArgs, attachments, id, notary, mustSign, timestamp, type)
     }
 

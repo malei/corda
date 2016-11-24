@@ -10,6 +10,7 @@ import net.corda.core.contracts.clauses.verifyClause
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
+import net.corda.core.crypto.StateParty
 import net.corda.core.node.services.VaultService
 import net.corda.core.random63BitValue
 import net.corda.core.schemas.MappedSchema
@@ -64,8 +65,8 @@ class CommercialPaper : Contract {
             val maturityDate: Instant
     ) : OwnableState, QueryableState, ICommercialPaperState {
         override val contract = CP_PROGRAM_ID
-        override val participants: List<CompositeKey>
-            get() = listOf(owner)
+        override val partiesToResolve: Collection<StateParty> get() = listOf(issuance.party)
+        override val participants: List<CompositeKey> get() = listOf(owner)
 
         val token: Issued<Terms>
             get() = Issued(issuance, Terms(faceValue.token, maturityDate))
