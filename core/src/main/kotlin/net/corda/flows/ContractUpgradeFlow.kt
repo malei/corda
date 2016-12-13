@@ -12,6 +12,7 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.UntrustworthyData
 import net.corda.flows.AbstractStateReplacementFlow.*
+import java.util.function.Function
 
 /**
  * A flow to be used for upgrading state objects of an old contract to a new contract.
@@ -26,7 +27,7 @@ object ContractUpgrade {
     val TOPIC = "platform.contract_upgrade"
 
     class Plugin : CordaPluginRegistry() {
-        override val servicePlugins: List<Class<*>> = listOf(Service::class.java)
+        override val servicePlugins = listOf(Function(::Service))
     }
 
     class Service(services: PluginServiceHub) : SingletonSerializeAsToken() {
