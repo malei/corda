@@ -397,9 +397,14 @@ interface NetCommand : CommandData {
 }
 
 /** Indicates that this transaction replaces the inputs from a legacy contract to a new equivalent contract. */
-interface UpgradeCommand<T: ContractState> : CommandData {
+interface UpgradeCommand<in T : ContractState> : CommandData {
     val oldContract: Contract
     val newContract: UpgradedContract<T>
+}
+
+interface ContractUpgradeResponse {
+    class Accepted(val newContract: UpgradedContract<*>, val contractClass:Class<*>) : ContractUpgradeResponse
+    class Rejected(val reason: String) : ContractUpgradeResponse
 }
 
 /** Wraps an object that was signed by a public key, which may be a well known/recognised institutional key. */
@@ -440,7 +445,6 @@ interface Contract {
      * rather than an argument so that additional data can be added without breaking binary compatibility with
      * existing contract code.
      */
-    @Throws(IllegalArgumentException::class)
     fun verify(tx: TransactionForContract)
 
     /**
@@ -457,21 +461,19 @@ interface Contract {
  * @param O the old contract state (can be [ContractState] or other common supertype if this supports upgrading
  * more than one state).
  */
-interface UpgradedContract<O : ContractState>: Contract {
+interface UpgradedContract<in O : ContractState>: Contract {
     /**
      * Upgrade the another contract's state object to a state object referencing this contract.
      *
      * @throws IllegalArgumentException if the given state object is not one that can be upgraded. This can be either
      * that the class is incompatible, or that the data inside the state object cannot be upgraded for some reason.
      */
-    @Throws(IllegalArgumentException::class)
     fun upgrade(state: O): ContractState
 }
 
 /**
  * Convenience method for upgrading a contract state from state and reference.
  */
-@Throws(IllegalArgumentException::class)
 fun <O : ContractState> UpgradedContract<O>.upgrade(ref: StateAndRef<O>): ContractState = upgrade(ref.state.data)
 
 /**

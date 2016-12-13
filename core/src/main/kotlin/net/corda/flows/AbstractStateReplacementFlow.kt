@@ -27,7 +27,7 @@ import net.corda.flows.AbstractStateReplacementFlow.Instigator
  * Finally, [Instigator] sends the transaction containing all participants' signatures to the notary for signature, and
  * then back to each participant so they can record it and use the new updated state for future transactions.
  */
-abstract class AbstractStateReplacementFlow<T> {
+class AbstractStateReplacementFlow {
     interface Proposal<out T> {
         val stateRef: StateRef
         val modification: T
@@ -211,8 +211,6 @@ abstract class AbstractStateReplacementFlow<T> {
         }
     }
 }
-
-
 /** Thrown when a participant refuses the proposed state replacement */
 class StateReplacementRefused(val identity: Party, val state: StateRef, val detail: String?) {
     override fun toString() = "A participant $identity refused to change state $state: " + (detail ?: "no reason provided")

@@ -7,7 +7,6 @@ import net.corda.core.crypto.SecureHash
 import net.corda.core.transactions.WireTransaction
 
 // The dummy contract doesn't do anything useful. It exists for testing purposes.
-
 val DUMMY_V2_PROGRAM_ID = DummyContractV2()
 
 /**
@@ -15,9 +14,8 @@ val DUMMY_V2_PROGRAM_ID = DummyContractV2()
  */
 class DummyContractV2 : UpgradedContract<DummyContract.State> {
     interface Clauses {
-        class Upgrade : UpgradeClause<ContractState, Commands, Unit>() {
+        class Upgrade : UpgradeClause<ContractState, Commands, Unit>(State::class.java) {
             override val requiredCommands: Set<Class<out CommandData>> = setOf(Commands.Upgrade::class.java)
-            override val expectedType: Class<*> = State::class.java
         }
     }
 
@@ -60,6 +58,5 @@ class DummyContractV2 : UpgradedContract<DummyContract.State> {
         }.toWireTransaction(), signees)
     }
 
-    override fun upgrade(state: DummyContract.State): DummyContractV2.State
-            = State(state.magicNumber, state.participants)
+    override fun upgrade(state: DummyContract.State) = State(state.magicNumber, state.participants)
 }

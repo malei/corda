@@ -167,7 +167,7 @@ interface VaultService {
 
     /** Get contracts we would be willing to upgrade the suggested contract to. */
     // TODO: We need a better place to put business logic functions
-    fun <T : ContractState> getUpgradeCandidates(old: Contract): Set<UpgradedContract<T>>
+    fun getUpgradeCandidates(old: Contract): Set<UpgradedContract<ContractState>>
     /** Attempt to upgrade the given contract to a newer version. */
     fun <T: ContractState> upgradeContracts(refs: List<StateAndRef<T>>, new: UpgradedContract<T>): List<ListenableFuture<*>>
 

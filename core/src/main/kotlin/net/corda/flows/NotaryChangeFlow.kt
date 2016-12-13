@@ -20,7 +20,7 @@ import net.corda.flows.NotaryChangeFlow.Instigator
  * Finally, [Instigator] sends the transaction containing all signatures back to each participant so they can record it and
  * use the new updated state for future transactions.
  */
-object NotaryChangeFlow : AbstractStateReplacementFlow<Party>() {
+object NotaryChangeFlow {
 
     data class Proposal(override val stateRef: StateRef,
                         override val modification: Party,

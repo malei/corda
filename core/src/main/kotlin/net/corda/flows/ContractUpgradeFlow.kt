@@ -4,12 +4,14 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
+import net.corda.core.flows.FlowLogic
+import net.corda.core.node.CordaPluginRegistry
+import net.corda.core.node.PluginServiceHub
+import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.transactions.SignedTransaction
-import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.UntrustworthyData
-import net.corda.flows.ContractUpgradeFlow.Acceptor
-import net.corda.flows.ContractUpgradeFlow.Instigator
+import net.corda.flows.AbstractStateReplacementFlow.*
 
 /**
  * A flow to be used for upgrading state objects of an old contract to a new contract.
@@ -19,24 +21,32 @@ import net.corda.flows.ContractUpgradeFlow.Instigator
  * Finally, [Instigator] sends the transaction containing all signatures back to each participant so they can record it and
  * use the new updated state for future transactions.
  */
-object ContractUpgradeFlow : AbstractStateReplacementFlow<UpgradedContract<*>>() {
+object ContractUpgrade {
+
     val TOPIC = "platform.contract_upgrade"
 
-    data class Proposal<S : ContractState>(override val stateRef: StateRef,
-                                           override val modification: UpgradedContract<S>,
-                                           override val stx: SignedTransaction) : AbstractStateReplacementFlow.Proposal<UpgradedContract<S>>
-
-    internal fun <T : ContractState> assembleBareTx(stateRef: StateAndRef<T>,
-                                                    newContract: UpgradedContract<T>): TransactionBuilder {
-        return TransactionType.General.Builder(stateRef.state.notary).withItems(stateRef, newContract.upgrade(stateRef.state.data))
+    class Plugin : CordaPluginRegistry() {
+        override val servicePlugins: List<Class<*>> = listOf(Service::class.java)
     }
 
-    class Instigator<S : ContractState>(originalState: StateAndRef<S>,
-                                        newContract: UpgradedContract<S>,
-                                        progressTracker: ProgressTracker = tracker())
-    : AbstractStateReplacementFlow.Instigator<S, UpgradedContract<S>>(originalState, newContract, progressTracker) {
-        override fun assembleProposal(stateRef: StateRef, modification: UpgradedContract<S>, stx: SignedTransaction)
-                = Proposal<S>(stateRef, modification, stx)
+    class Service(services: PluginServiceHub) : SingletonSerializeAsToken() {
+        init {
+            services.registerFlowInitiator(ContractUpgradeInstigator::class) { ContractUpgradeAcceptor(it) }
+        }
+    }
+
+    data class ContractUpgradeProposal<in S : ContractState>(override val stateRef: StateRef,
+                                                             override val modification: UpgradedContract<S>,
+                                                             override val stx: SignedTransaction) : Proposal<UpgradedContract<S>>
+
+    internal fun <T : ContractState> assembleBareTx(stateRef: StateAndRef<T>, newContract: UpgradedContract<T>) =
+            TransactionType.General.Builder(stateRef.state.notary).withItems(stateRef, newContract.upgrade(stateRef.state.data))
+
+    class ContractUpgradeInstigator<S : ContractState>(originalState: StateAndRef<S>,
+                                                       newContract: UpgradedContract<S>,
+                                                       progressTracker: ProgressTracker = tracker()) : Instigator<S, UpgradedContract<S>>(originalState, newContract, progressTracker) {
+
+        override fun assembleProposal(stateRef: StateRef, modification: UpgradedContract<S>, stx: SignedTransaction) = ContractUpgradeProposal(stateRef, modification, stx)
 
         override fun assembleTx(): Pair<SignedTransaction, List<CompositeKey>> {
             val ptx = assembleBareTx(originalState, modification)
@@ -45,31 +55,30 @@ object ContractUpgradeFlow : AbstractStateReplacementFlow<UpgradedContract<*>>()
         }
     }
 
-    class Acceptor<T : ContractState>(otherSide: Party,
-                                      val clazz: Class<T>,
-                                      override val progressTracker: ProgressTracker = tracker())
-    : AbstractStateReplacementFlow.Acceptor<UpgradedContract<T>>(otherSide) {
+    class ContractUpgradeAcceptor(otherSide: Party, override val progressTracker: ProgressTracker = tracker()) : Acceptor<UpgradedContract<ContractState>>(otherSide) {
         @Suspendable
-        override fun verifyProposal(maybeProposal: UntrustworthyData<AbstractStateReplacementFlow.Proposal<UpgradedContract<T>>>): AbstractStateReplacementFlow.Proposal<UpgradedContract<T>> {
-            return maybeProposal.unwrap { proposal ->
-                val states = serviceHub.vaultService.statesForRefs(listOf(proposal.stateRef))
-                val state = states[proposal.stateRef] ?: throw IllegalStateException("We don't have a copy of the referenced state")
+        override fun verifyProposal(maybeProposal: UntrustworthyData<Proposal<UpgradedContract<ContractState>>>) = maybeProposal.unwrap { proposal ->
+            val states = serviceHub.vaultService.statesForRefs(listOf(proposal.stateRef))
+            val state = states[proposal.stateRef] ?: throw IllegalStateException("We don't have a copy of the referenced state")
 
-                require (state.data.javaClass.equals(clazz))
+            val stateAndRef = StateAndRef(state, proposal.stateRef)
+            val acceptedModification = serviceHub.vaultService.getUpgradeCandidates(state.data.contract)
 
-                @Suppress("unchecked_cast")
-                // We've enforced type safety above, just we can't do it in a way Kotlin recognises
-                val stateAndRef = StateAndRef<T>(state as TransactionState<T>, proposal.stateRef)
-                val upgradeCandidates: Set<UpgradedContract<T>> = serviceHub.vaultService.getUpgradeCandidates<T>(state.data.contract)
-                val actualTx = proposal.stx.tx
-                val expectedTx = assembleBareTx(stateAndRef, proposal.modification).toWireTransaction()
-                requireThat {
-                    "the proposed contract $proposal.contract is a trusted upgrade path" by (proposal.modification in upgradeCandidates)
-                    "the proposed tx matches the expected tx for this upgrade" by (actualTx == expectedTx)
-                }
+            val actualTx = proposal.stx.tx
+            val expectedTx = assembleBareTx(stateAndRef, proposal.modification).toWireTransaction()
 
-                proposal
+            requireThat {
+                "the proposed contract $proposal.contract is a trusted upgrade path" by (proposal.modification == acceptedModification)
+                "the proposed tx matches the expected tx for this upgrade" by (actualTx == expectedTx)
             }
+            proposal
         }
     }
+
+    class ContractUpgradeFlow<T : ContractState>(val oldContract: List<StateAndRef<T>>, val toNewContract: (List<StateAndRef<T>>) -> UpgradedContract<T>) : FlowLogic<Unit>() {
+        override fun call() {
+            serviceHub.vaultService.upgradeContracts(oldContract, toNewContract(oldContract))
+        }
+    }
+
 }

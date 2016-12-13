@@ -345,26 +345,28 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         return Vault.Update(consumedStates, ourNewStates.toHashSet())
     }
 
-    private fun isRelevant(state: ContractState, ourKeys: Set<PublicKey>): Boolean {
-        return if (state is OwnableState) {
-            state.owner.containsAny(ourKeys)
-        } else if (state is LinearState) {
-            // It's potentially of interest to the vault
-            state.isRelevant(ourKeys)
-        } else {
-            false
-        }
-    }
+    // TODO : Persists this in DB.
+    private val upgradeableContract = mutableMapOf<Contract, Set<UpgradedContract<ContractState>>>()
 
-    override fun <T : ContractState> getUpgradeCandidates(old: Contract): Set<UpgradedContract<T>> {
+    override fun getUpgradeCandidates(old: Contract): Set<UpgradedContract<ContractState>> {
         // TODO: Add some rules here - likely user configured values as a start
         // TODO: Either here or somewhere else, make sure there's a process for blocking upgrades until dependent contracts
         //       have all been updated. For example obligations to pay cash must be updated before cash is updated.
-        return emptySet()
+        return upgradeableContract[old] ?: emptySet()
     }
 
     override fun <T : ContractState> upgradeContracts(refs: List<StateAndRef<T>>, new: UpgradedContract<T>): List<ListenableFuture<*>> {
-        // refs.map { ref -> smm.add(ContractUpgradeProtocol.Instigator(ref, new)) }.toList()
+/*
+        refs.map { ref -> .add(ContractUpgradeFlow.Instigator(ref, new)) }.toList()
+*/
+        services
         return emptyList()
+    }
+
+    private fun isRelevant(state: ContractState, ourKeys: Set<PublicKey>) = when (state) {
+        is OwnableState -> state.owner.containsAny(ourKeys)
+            // It's potentially of interest to the vault
+        is LinearState -> state.isRelevant(ourKeys)
+        else -> false
     }
 }

@@ -13,9 +13,8 @@ val DUMMY_PROGRAM_ID = DummyContract()
 
 data class DummyContract(override val legalContractReference: SecureHash = SecureHash.sha256("")) : Contract {
     interface Clauses {
-        class Upgrade: UpgradeClause<ContractState, Commands, Unit>() {
-            override val requiredCommands: Set<Class<out CommandData>> = setOf(Commands.Upgrade::class.java)
-            override val expectedType: Class<*> = State::class.java
+        class Upgrade : UpgradeClause<ContractState, Commands, Unit>(State::class.java) {
+            override val requiredCommands = setOf(Commands.Upgrade::class.java)
         }
     }
 
@@ -63,7 +62,7 @@ data class DummyContract(override val legalContractReference: SecureHash = Secur
 
         fun move(prior: StateAndRef<DummyContract.SingleOwnerState>, newOwner: CompositeKey) = move(listOf(prior), newOwner)
         fun move(priors: List<StateAndRef<DummyContract.SingleOwnerState>>, newOwner: CompositeKey): TransactionBuilder {
-            require(priors.size > 0)
+            require(priors.isNotEmpty())
             val priorState = priors[0].state.data
             val (cmd, state) = priorState.withNewOwner(newOwner)
             return TransactionType.General.Builder(notary = priors[0].state.notary).withItems(
