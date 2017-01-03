@@ -18,6 +18,7 @@ import java.util.stream.*;
 import static kotlin.collections.CollectionsKt.*;
 import static net.corda.core.contracts.ContractsDSL.*;
 
+
 /**
  * This is a Java version of the CommercialPaper contract (chosen because it's simple). This demonstrates how the
  * use of Kotlin for implementation of the framework does not impose the same language choice on contract developers.

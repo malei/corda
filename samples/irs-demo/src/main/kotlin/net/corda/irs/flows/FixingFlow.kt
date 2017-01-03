@@ -143,6 +143,7 @@ object FixingFlow {
         override fun call(): Unit {
             progressTracker.nextStep()
             val dealToFix = serviceHub.loadState(ref)
+            // TODO: this is not the eventual mechanism for identifying the parties
             val fixableDeal = (dealToFix.data as FixableDealState)
             val parties = fixableDeal.parties.filter { it.owningKey != serviceHub.myInfo.legalIdentity.owningKey }
                     .map { it.resolveParty(serviceHub.identityService) }

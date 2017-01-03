@@ -15,7 +15,7 @@ class AnotherDummyContract : Contract, net.corda.core.node.DummyContractBackdoor
     data class State(val magicNumber: Int = 0) : ContractState {
         override val contract = ANOTHER_DUMMY_PROGRAM_ID
         override val participants: List<CompositeKey>
-                get() = emptyList()
+            get() = emptyList()
         override val partiesToResolve: Collection<StateParty> = emptyList()
     }
 
