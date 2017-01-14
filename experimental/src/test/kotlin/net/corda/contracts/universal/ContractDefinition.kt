@@ -3,6 +3,7 @@ package net.corda.contracts.universal
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.composite
 import net.corda.core.crypto.generateKeyPair
+import org.junit.Ignore
 import org.junit.Test
 import java.util.*
 
@@ -128,4 +129,12 @@ class ContractDefinition {
         }
     }
 
+    @Test @Ignore
+    fun `pretty print`() {
+        println(prettyPrint(cds_contract))
+
+        println(prettyPrint(american_fx_option))
+
+        println(prettyPrint(european_fx_option))
+    }
 }
