@@ -22,6 +22,8 @@ class FXSwap {
         }
     }
 
+    val contract2 = fx_swap("2017-09-01", 1.07.bd, 1.M, EUR, USD, highStreetBank, acmeCorp)
+
     val transfer1 = arrange { highStreetBank.owes(acmeCorp, 1070.K, EUR) }
     val transfer2 = arrange { acmeCorp.owes(highStreetBank, 1.M, USD) }
 
@@ -179,7 +181,10 @@ class FXSwap {
 
     @Test @Ignore
     fun `pretty print`() {
-        println ( prettyPrint(contract) )
+        println(prettyPrint(contract))
+
+        println(prettyPrint(contract2))
+
     }
 
 }
