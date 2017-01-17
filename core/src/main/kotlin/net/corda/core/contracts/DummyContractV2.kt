@@ -12,15 +12,14 @@ val DUMMY_V2_PROGRAM_ID = DummyContractV2()
 /**
  * Dummy contract for testing of the upgrade process.
  */
-class DummyContractV2 : UpgradedContract<DummyContract.State> {
+class DummyContractV2 : UpgradedContract<DummyContract.State, DummyContractV2.State> {
     interface Clauses {
         class Upgrade : UpgradeClause<ContractState, Commands, Unit>(State::class.java) {
             override val requiredCommands: Set<Class<out CommandData>> = setOf(Commands.Upgrade::class.java)
         }
     }
 
-    data class State(val magicNumber: Int = 0,
-                     val owners: List<CompositeKey>) : ContractState {
+    data class State(val magicNumber: Int = 0, val owners: List<CompositeKey>) : ContractState {
         override val contract = DUMMY_V2_PROGRAM_ID
         override val participants: List<CompositeKey> = owners
     }
@@ -28,8 +27,10 @@ class DummyContractV2 : UpgradedContract<DummyContract.State> {
     interface Commands : CommandData {
         class Create : TypeOnlyCommandData(), Commands
         class Move : TypeOnlyCommandData(), Commands
-        data class Upgrade(override val oldContract: Contract,
-                           override val newContract: UpgradedContract<State>) : UpgradeCommand<State>, Commands
+        object Upgrade : UpgradeCommand<DummyContract.State, DummyContractV2.State>, Commands {
+            override val oldContract = DUMMY_PROGRAM_ID
+            override val newContract = DUMMY_V2_PROGRAM_ID
+        }
     }
 
     fun extractCommands(tx: TransactionForContract) = tx.commands.select<Commands>()
@@ -47,16 +48,16 @@ class DummyContractV2 : UpgradedContract<DummyContract.State> {
         val notary = states.map { it.state.notary }.single()
         require(states.isNotEmpty())
 
-        val newContract = this
         val signees = states.flatMap { it.state.data.participants }.toSet()
         return Pair(TransactionType.General.Builder(notary).apply {
             states.forEach {
                 addInputState(it)
-                addOutputState(upgrade(it.state.data))
+                val (newState, command) = upgrade(it.state.data)
+                addOutputState(newState)
+                addCommand(command, signees.toList())
             }
-            addCommand(DummyContract.Commands.Upgrade(DummyContract(), newContract), signees.toList())
         }.toWireTransaction(), signees)
     }
 
-    override fun upgrade(state: DummyContract.State) = State(state.magicNumber, state.participants)
+    override fun upgrade(state: DummyContract.State) = Pair(State(state.magicNumber, state.participants), Commands.Upgrade)
 }

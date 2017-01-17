@@ -27,16 +27,16 @@ import net.corda.flows.AbstractStateReplacementFlow.Instigator
  * Finally, [Instigator] sends the transaction containing all participants' signatures to the notary for signature, and
  * then back to each participant so they can record it and use the new updated state for future transactions.
  */
-class AbstractStateReplacementFlow {
+object AbstractStateReplacementFlow {
     interface Proposal<out T> {
         val stateRef: StateRef
         val modification: T
         val stx: SignedTransaction
     }
 
-    abstract class Instigator<out S : ContractState, T>(val originalState: StateAndRef<S>,
-                                                        val modification: T,
-                                                        override val progressTracker: ProgressTracker = tracker()) : FlowLogic<StateAndRef<S>>() {
+    abstract class Instigator<out S : ContractState, out T : ContractState, M>(val originalState: StateAndRef<S>,
+                                                                               val modification: M,
+                                                                               override val progressTracker: ProgressTracker = tracker()) : FlowLogic<StateAndRef<T>>() {
         companion object {
 
             object SIGNING : ProgressTracker.Step("Requesting signatures from other parties")
@@ -47,7 +47,7 @@ class AbstractStateReplacementFlow {
         }
 
         @Suspendable
-        override fun call(): StateAndRef<S> {
+        override fun call(): StateAndRef<T> {
             val (stx, participants) = assembleTx()
 
             progressTracker.currentStep = SIGNING
@@ -66,7 +66,7 @@ class AbstractStateReplacementFlow {
             return finalTx.tx.outRef(0)
         }
 
-        abstract protected fun assembleProposal(stateRef: StateRef, modification: T, stx: SignedTransaction): Proposal<T>
+        abstract protected fun assembleProposal(stateRef: StateRef, modification: M, stx: SignedTransaction): Proposal<M>
         abstract protected fun assembleTx(): Pair<SignedTransaction, Iterable<CompositeKey>>
 
         @Suspendable
@@ -129,9 +129,11 @@ class AbstractStateReplacementFlow {
             progressTracker.currentStep = VERIFYING
             val maybeProposal: UntrustworthyData<Proposal<T>> = receive(otherSide)
             try {
-                val stx: SignedTransaction = maybeProposal.unwrap { verifyProposal(maybeProposal).stx }
-                verifyTx(stx)
-                approve(stx)
+                maybeProposal.unwrap {
+                    val stx = verifyProposal(maybeProposal).stx
+                    verifyTx(stx)
+                    approve(stx)
+                }
             } catch(e: Exception) {
                 // TODO: catch only specific exceptions. However, there are numerous validation exceptions
                 //       that might occur (tx validation/resolution, invalid proposal). Need to rethink how

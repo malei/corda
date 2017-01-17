@@ -2,7 +2,6 @@ package net.corda.core.contracts.clauses
 
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
-import kotlin.reflect.KClass
 
 /**
  * Verify that the upgrade of an input state is correctly signed, and the output state matches. This requires that all
@@ -11,8 +10,8 @@ import kotlin.reflect.KClass
  */
 abstract class UpgradeClause<in S : ContractState, C : CommandData, in K : Any>(val expectedType: Class<*>) : Clause<S, C, K>() {
     override fun verify(tx: TransactionForContract, inputs: List<S>, outputs: List<S>, commands: List<AuthenticatedObject<C>>, groupingKey: K?): Set<C> {
-        val matchedCommands = commands.filter { it.value is UpgradeCommand<*> }
-        val command = matchedCommands.select<UpgradeCommand<S>>().singleOrNull()
+        val matchedCommands = commands.filter { it.value is UpgradeCommand<*, *> }
+        val command = matchedCommands.select<UpgradeCommand<S, *>>().singleOrNull()
 
         if (command != null) {
             // Now check the digital signatures on the move command. Every input has an owning public key, and we must
@@ -26,13 +25,13 @@ abstract class UpgradeClause<in S : ContractState, C : CommandData, in K : Any>(
                 "number of inputs and outputs match" by (inputs.size == outputs.size)
                 "all inputs belong to the legacy contract" by inputs.all { it.contract == command.value.oldContract }
                 "all inputs are of a suitable type" by outputs.all { it.javaClass == expectedType }
-                "all outputs belong to the upgraded contract" by outputs.all { it.contract == command.value.newContract }
+                "all outputs belong to the upgraded contract" by outputs.all { it.contract.javaClass == command.value.newContract.javaClass }
             }
 
             val upgradeContract = command.value.newContract
 
-            for (stateIdx in 0..inputs.size) {
-                val expected: ContractState = upgradeContract.upgrade(inputs[stateIdx])
+            for (stateIdx in 0..inputs.size - 1) {
+                val expected: ContractState = upgradeContract.upgrade(inputs[stateIdx]).first
                 require(outputs[stateIdx] == expected) { "output state is must be an upgraded version of the input state" }
             }
         }

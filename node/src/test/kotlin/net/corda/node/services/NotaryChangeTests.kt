@@ -152,7 +152,7 @@ class NotaryChangeTests {
 }
 
 fun issueState(node: AbstractNode, notaryNode: AbstractNode): StateAndRef<*> {
-    val tx = DummyContract.generateInitial(node.info.legalIdentity.ref(0), Random().nextInt(), notaryNode.info.notaryIdentity)
+    val tx = DummyContract.generateInitial(Random().nextInt(), notaryNode.info.notaryIdentity, node.info.legalIdentity.ref(0))
     val nodeKey = node.services.legalIdentityKey
     tx.signWith(nodeKey)
     val notaryKeyPair = notaryNode.services.notaryIdentityKey
@@ -180,7 +180,7 @@ fun issueMultiPartyState(nodeA: AbstractNode, nodeB: AbstractNode, notaryNode: A
 }
 
 fun issueInvalidState(node: AbstractNode, notary: Party): StateAndRef<*> {
-    val tx = DummyContract.generateInitial(node.info.legalIdentity.ref(0), Random().nextInt(), notary)
+    val tx = DummyContract.generateInitial(Random().nextInt(), notary, node.info.legalIdentity.ref(0))
     tx.setTime(Instant.now(), 30.seconds)
     val nodeKey = node.services.legalIdentityKey
     tx.signWith(nodeKey)

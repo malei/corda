@@ -1,7 +1,6 @@
 package net.corda.node.services.vault
 
 import com.google.common.collect.Sets
-import com.google.common.util.concurrent.ListenableFuture
 import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
@@ -346,21 +345,15 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
     }
 
     // TODO : Persists this in DB.
-    private val upgradeableContract = mutableMapOf<Contract, Set<UpgradedContract<ContractState>>>()
+    private val upgradeableContract = mutableMapOf<Contract, UpgradedContract<ContractState, ContractState>>()
 
-    override fun getUpgradeCandidates(old: Contract): Set<UpgradedContract<ContractState>> {
-        // TODO: Add some rules here - likely user configured values as a start
-        // TODO: Either here or somewhere else, make sure there's a process for blocking upgrades until dependent contracts
-        //       have all been updated. For example obligations to pay cash must be updated before cash is updated.
-        return upgradeableContract[old] ?: emptySet()
-    }
+    override fun getUpgradeableContract(old: Contract) = upgradeableContract[old]
 
-    override fun <T : ContractState> upgradeContracts(refs: List<StateAndRef<T>>, new: UpgradedContract<T>): List<ListenableFuture<*>> {
-/*
-        refs.map { ref -> .add(ContractUpgradeFlow.Instigator(ref, new)) }.toList()
-*/
-        services
-        return emptyList()
+    @Suppress("UNCHECKED_CAST")
+    override fun <S : ContractState, T : ContractState> acceptContractUpgrade(ref: StateAndRef<S>, new: UpgradedContract<S, T>) {
+        services.storageService.validatedTransactions.getTransaction(ref.ref.txhash)?.let {
+            upgradeableContract.put(it.tx.outRef<ContractState>(0).state.data.contract, new as UpgradedContract<ContractState, ContractState>)
+        }
     }
 
     private fun isRelevant(state: ContractState, ourKeys: Set<PublicKey>) = when (state) {

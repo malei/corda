@@ -397,13 +397,19 @@ interface NetCommand : CommandData {
 }
 
 /** Indicates that this transaction replaces the inputs from a legacy contract to a new equivalent contract. */
-interface UpgradeCommand<in T : ContractState> : CommandData {
+interface UpgradeCommand<in S : ContractState, out T : ContractState> : CommandData {
     val oldContract: Contract
-    val newContract: UpgradedContract<T>
+    val newContract: UpgradedContract<S, T>
+}
+
+/** Indicates that this transaction replaces the inputs from a legacy contract to a new equivalent contract. */
+interface DowngradeCommand<in S : ContractState, out T : ContractState> : CommandData {
+    val oldContract: Contract
+    val newContract: UpgradedContract<S, T>
 }
 
 interface ContractUpgradeResponse {
-    class Accepted(val newContract: UpgradedContract<*>, val contractClass:Class<*>) : ContractUpgradeResponse
+    class Accepted(val newContract: UpgradedContract<*, *>, val contractClass: Class<*>) : ContractUpgradeResponse
     class Rejected(val reason: String) : ContractUpgradeResponse
 }
 
@@ -458,23 +464,24 @@ interface Contract {
  * Interface for contracts which can upgrade state objects issued by other contracts. Generally represents that this
  * is an upgraded version of the previous contract.
  *
- * @param O the old contract state (can be [ContractState] or other common supertype if this supports upgrading
+ * @param S the old contract state (can be [ContractState] or other common supertype if this supports upgrading
  * more than one state).
+ * @param T the new contract state
  */
-interface UpgradedContract<in O : ContractState>: Contract {
+interface UpgradedContract<in S : ContractState, out T : ContractState> : Contract {
     /**
      * Upgrade the another contract's state object to a state object referencing this contract.
      *
      * @throws IllegalArgumentException if the given state object is not one that can be upgraded. This can be either
      * that the class is incompatible, or that the data inside the state object cannot be upgraded for some reason.
      */
-    fun upgrade(state: O): ContractState
+    fun upgrade(state: S): Pair<T, UpgradeCommand<S, T>>
 }
 
 /**
  * Convenience method for upgrading a contract state from state and reference.
  */
-fun <O : ContractState> UpgradedContract<O>.upgrade(ref: StateAndRef<O>): ContractState = upgrade(ref.state.data)
+fun <S : ContractState, T : ContractState> UpgradedContract<S, T>.upgrade(ref: StateAndRef<S>): T = upgrade(ref.state.data).first
 
 /**
  * An attachment is a ZIP (or an optionally signed JAR) that contains one or more files. Attachments are meant to

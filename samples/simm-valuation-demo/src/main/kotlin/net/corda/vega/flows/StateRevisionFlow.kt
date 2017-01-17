@@ -20,7 +20,7 @@ object StateRevisionFlow {
                                override val stx: SignedTransaction) : AbstractStateReplacementFlow.Proposal<T>
 
     class Requester<T>(curStateRef: StateAndRef<RevisionedState<T>>, val updatedData: T)
-        : AbstractStateReplacementFlow.Instigator<RevisionedState<T>, T>(curStateRef, updatedData) {
+        : AbstractStateReplacementFlow.Instigator<RevisionedState<T>, RevisionedState<T>, T>(curStateRef, updatedData) {
         override fun assembleProposal(stateRef: StateRef, modification: T, stx: SignedTransaction): AbstractStateReplacementFlow.Proposal<T>
                 = Proposal(stateRef, modification, stx)
 

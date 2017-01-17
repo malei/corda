@@ -21,12 +21,12 @@ class DummyContractV2Tests {
 
         assertEquals(v1Ref, tx.inputs.single())
 
-        val expectedOutput: TransactionState<ContractState> = TransactionState(contract.upgrade(v1State.data), DUMMY_NOTARY)
+        val expectedOutput: TransactionState<ContractState> = TransactionState(contract.upgrade(v1State.data).first, DUMMY_NOTARY)
         val actualOutput = tx.outputs.single()
         assertEquals(expectedOutput, actualOutput)
 
         val actualCommand = tx.commands.map { it.value }.single()
-        assertTrue((actualCommand as UpgradeCommand<*>).oldContract is DummyContract)
+        assertTrue((actualCommand as UpgradeCommand<*, *>).oldContract is DummyContract)
         assertTrue(actualCommand.newContract is DummyContractV2)
     }
 }

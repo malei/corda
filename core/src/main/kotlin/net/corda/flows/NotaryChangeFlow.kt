@@ -29,7 +29,7 @@ object NotaryChangeFlow {
     class Instigator<T : ContractState>(originalState: StateAndRef<T>,
                                         newNotary: Party,
                                         progressTracker: ProgressTracker = tracker())
-        : AbstractStateReplacementFlow.Instigator<T, Party>(originalState, newNotary, progressTracker) {
+        : AbstractStateReplacementFlow.Instigator<T, T, Party>(originalState, newNotary, progressTracker) {
 
         override fun assembleProposal(stateRef: StateRef, modification: Party, stx: SignedTransaction): AbstractStateReplacementFlow.Proposal<Party>
                 = Proposal(stateRef, modification, stx)
