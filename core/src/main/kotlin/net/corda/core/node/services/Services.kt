@@ -143,7 +143,7 @@ interface VaultService {
     }
 
     fun statesForRefs(refs: List<StateRef>): Map<StateRef, TransactionState<*>?> {
-        val refsToStates = currentVault.states.asSequence().filter { it.ref in refs }.associateBy { it.ref }
+        val refsToStates = currentVault.states.associateBy { it.ref }
         return refs.associateBy({ it }) { refsToStates[it]?.state }
     }
 
@@ -171,7 +171,7 @@ interface VaultService {
 
     /** Get contracts we would be willing to upgrade the suggested contract to. */
     // TODO: We need a better place to put business logic functions
-    fun getUpgradeableContract(old: Contract): UpgradedContract<ContractState, ContractState>?
+    fun getAcceptedContractUpgrade(old: Contract): UpgradedContract<ContractState, ContractState>?
     /** Attempt to upgrade the given contract to a newer version. */
     fun <S : ContractState, T : ContractState> acceptContractUpgrade(ref: StateAndRef<S>, new: UpgradedContract<S, T>)
 

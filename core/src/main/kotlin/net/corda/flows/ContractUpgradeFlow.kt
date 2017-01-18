@@ -45,7 +45,7 @@ object ContractUpgrade {
         override fun verifyProposal(maybeProposal: UntrustworthyData<AbstractStateReplacementFlow.Proposal<UpgradedContract<ContractState, ContractState>>>) = maybeProposal.unwrap { proposal ->
             val tx = serviceHub.storageService.validatedTransactions.getTransaction(proposal.stateRef.txhash) ?: throw IllegalStateException("We don't have a copy of the referenced state")
             val state = tx.tx.outRef<ContractState>(proposal.stateRef.index).state
-            val acceptedUpgrade = serviceHub.vaultService.getUpgradeableContract(state.data.contract) ?: throw IllegalStateException("Contract ${state.data.contract}, upgrade rejected.")
+            val acceptedUpgrade = serviceHub.vaultService.getAcceptedContractUpgrade(state.data.contract) ?: throw IllegalStateException("Contract ${state.data.contract}, upgrade rejected.")
             val actualTx = proposal.stx.tx
             actualTx.inputs.map { serviceHub.vaultService.statesForRef(it) }
             val expectedTx = assembleBareTx(StateAndRef(state, proposal.stateRef), proposal.modification).toWireTransaction()

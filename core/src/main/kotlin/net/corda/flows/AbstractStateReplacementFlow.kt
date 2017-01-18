@@ -34,6 +34,10 @@ object AbstractStateReplacementFlow {
         val stx: SignedTransaction
     }
 
+    /**
+     * @param S the input contract state
+     * @param T the output contract state, this could be different from [S] in some cases. For example, in contract upgrade, the output state object might be different from the input state.
+     */
     abstract class Instigator<out S : ContractState, out T : ContractState, M>(val originalState: StateAndRef<S>,
                                                                                val modification: M,
                                                                                override val progressTracker: ProgressTracker = tracker()) : FlowLogic<StateAndRef<T>>() {
@@ -129,11 +133,9 @@ object AbstractStateReplacementFlow {
             progressTracker.currentStep = VERIFYING
             val maybeProposal: UntrustworthyData<Proposal<T>> = receive(otherSide)
             try {
-                maybeProposal.unwrap {
-                    val stx = verifyProposal(maybeProposal).stx
-                    verifyTx(stx)
-                    approve(stx)
-                }
+                val stx = maybeProposal.unwrap { verifyProposal(maybeProposal).stx }
+                verifyTx(stx)
+                approve(stx)
             } catch(e: Exception) {
                 // TODO: catch only specific exceptions. However, there are numerous validation exceptions
                 //       that might occur (tx validation/resolution, invalid proposal). Need to rethink how
@@ -213,6 +215,7 @@ object AbstractStateReplacementFlow {
         }
     }
 }
+
 /** Thrown when a participant refuses the proposed state replacement */
 class StateReplacementRefused(val identity: Party, val state: StateRef, val detail: String?) {
     override fun toString() = "A participant $identity refused to change state $state: " + (detail ?: "no reason provided")

@@ -347,7 +347,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
     // TODO : Persists this in DB.
     private val upgradeableContract = mutableMapOf<Contract, UpgradedContract<ContractState, ContractState>>()
 
-    override fun getUpgradeableContract(old: Contract) = upgradeableContract[old]
+    override fun getAcceptedContractUpgrade(old: Contract) = upgradeableContract[old]
 
     @Suppress("UNCHECKED_CAST")
     override fun <S : ContractState, T : ContractState> acceptContractUpgrade(ref: StateAndRef<S>, new: UpgradedContract<S, T>) {
@@ -358,7 +358,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
 
     private fun isRelevant(state: ContractState, ourKeys: Set<PublicKey>) = when (state) {
         is OwnableState -> state.owner.containsAny(ourKeys)
-            // It's potentially of interest to the vault
+    // It's potentially of interest to the vault
         is LinearState -> state.isRelevant(ourKeys)
         else -> false
     }
