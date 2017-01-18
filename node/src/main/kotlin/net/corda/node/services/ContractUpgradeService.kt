@@ -3,7 +3,7 @@ package net.corda.node.services
 import net.corda.core.node.CordaPluginRegistry
 import net.corda.core.node.PluginServiceHub
 import net.corda.core.serialization.SingletonSerializeAsToken
-import net.corda.flows.ContractUpgradeFlow
+import net.corda.flows.ContractUpgrade
 import java.util.function.Function
 
 object ContractUpgrade {
@@ -13,7 +13,7 @@ object ContractUpgrade {
 
     class Service(services: PluginServiceHub) : SingletonSerializeAsToken() {
         init {
-            services.registerFlowInitiator(ContractUpgradeFlow.Instigator::class) { ContractUpgradeFlow.Acceptor(it) }
+            services.registerFlowInitiator(ContractUpgrade.InstigatorFlow::class) { ContractUpgrade.AcceptorFlow(it) }
         }
     }
 }

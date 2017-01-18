@@ -402,15 +402,9 @@ interface UpgradeCommand<in S : ContractState, out T : ContractState> : CommandD
     val newContract: UpgradedContract<S, T>
 }
 
-/** Indicates that this transaction replaces the inputs from a legacy contract to a new equivalent contract. */
-interface DowngradeCommand<in S : ContractState, out T : ContractState> : CommandData {
-    val oldContract: Contract
-    val newContract: UpgradedContract<S, T>
-}
-
 interface ContractUpgradeResponse {
-    class Accepted(val newContract: UpgradedContract<*, *>, val contractClass: Class<*>) : ContractUpgradeResponse
-    class Rejected(val reason: String) : ContractUpgradeResponse
+    class Accepted<out T : ContractState>(val ref: StateAndRef<T>) : ContractUpgradeResponse
+    class Rejected(val reason: String?) : ContractUpgradeResponse
 }
 
 /** Wraps an object that was signed by a public key, which may be a well known/recognised institutional key. */
@@ -518,5 +512,3 @@ interface Attachment : NamedByHash {
         throw FileNotFoundException()
     }
 }
-
-

@@ -14,11 +14,7 @@ import net.corda.core.schemas.QueryableState
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.core.utilities.Emoji
-import net.corda.flows.CashCommand
-import net.corda.flows.CashFlow
-import net.corda.flows.CashFlowResult
-import net.corda.flows.ContractUpgradeFlow.Instigator
-import net.corda.flows.ResolveTransactionsFlow
+import net.corda.flows.*
 import net.corda.node.utilities.databaseTransaction
 import net.corda.schemas.CashSchema
 import net.corda.testing.node.MockNetwork
@@ -68,21 +64,36 @@ class ContractUpgradeFlowTest {
         a.services.startFlow(ResolveTransactionsFlow(setOf(stx.id), a.info.legalIdentity))
         mockNet.runNetwork()
 
-        val btx = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(stx.id) }
-
-        requireNotNull(btx)
-        b.vault.acceptContractUpgrade(btx!!.tx.outRef(0), DummyContractV2())
-
         val atx = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(stx.id) }
+        val btx = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(stx.id) }
+        requireNotNull(atx)
+        requireNotNull(btx)
 
-        val result = a.services.startFlow(Instigator(atx!!.tx.outRef(0), DummyContractV2())).resultFuture
+        // The request is expected to be rejected because party B haven't accepted upgrade yet.
+        val rejectedFuture = a.services.startFlow(ContractUpgradeFlow(atx!!.tx.outRef(0), DummyContractV2())).resultFuture
+        mockNet.runNetwork()
+        val rejected = rejectedFuture.get()
+        assertTrue(rejected is ContractUpgradeResponse.Rejected)
 
+        // Party B accept to upgrade the contract state.
+        b.services.startFlow(ContractUpgradeAcceptFlow(btx!!.tx.outRef(0), DummyContractV2()))
         mockNet.runNetwork()
 
-        val newState = result.get()
-        val updateTX_A = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(newState.ref.txhash) }
-        val updateTX_B = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(newState.ref.txhash) }
+        // Party A initiate contract upgrade flow, expected to success this time.
+        val resultFuture = a.services.startFlow(ContractUpgradeFlow(atx.tx.outRef(0), DummyContractV2())).resultFuture
+        mockNet.runNetwork()
 
+        val result = resultFuture.get()
+        assertTrue(result is ContractUpgradeResponse.Accepted<*>)
+
+        val (updateTX_A, updateTX_B) = when (result) {
+            is ContractUpgradeResponse.Accepted<*> -> {
+                val updateTX_A = databaseTransaction(a.database) { a.services.storageService.validatedTransactions.getTransaction(result.ref.ref.txhash) }
+                val updateTX_B = databaseTransaction(b.database) { b.services.storageService.validatedTransactions.getTransaction(result.ref.ref.txhash) }
+                Pair(updateTX_A, updateTX_B)
+            }
+            else -> Pair(null, null)
+        }
         requireNotNull(updateTX_A)
         requireNotNull(updateTX_B)
 
@@ -108,7 +119,9 @@ class ContractUpgradeFlowTest {
     @Test
     fun `upgrade Cash to v2`() {
         // Create some cash.
-        val stateAndRef = a.services.startFlow(CashFlow(CashCommand.IssueCash(Amount(1000, USD), OpaqueBytes.of(1), a.info.legalIdentity, notary))).resultFuture.get().let {
+        val result = a.services.startFlow(CashFlow(CashCommand.IssueCash(Amount(1000, USD), OpaqueBytes.of(1), a.info.legalIdentity, notary))).resultFuture
+        mockNet.runNetwork()
+        val stateAndRef = result.get().let {
             when (it) {
                 is CashFlowResult.Success -> it.transaction?.tx?.outRef<Cash.State>(0)
                 else -> null
@@ -116,7 +129,7 @@ class ContractUpgradeFlowTest {
         }
         requireNotNull(stateAndRef)
         // Starts contract upgrade flow.
-        a.services.startFlow(Instigator(stateAndRef!!, CashV2))
+        a.services.startFlow(ContractUpgradeFlow(stateAndRef!!, CashV2))
         mockNet.runNetwork()
         // Get contract state form the vault.
         val state = databaseTransaction(a.database) { a.vault.currentVault.states }
