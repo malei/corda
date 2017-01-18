@@ -399,7 +399,8 @@ interface NetCommand : CommandData {
 /** Indicates that this transaction replaces the inputs from a legacy contract to a new equivalent contract. */
 interface UpgradeCommand<in S : ContractState, out T : ContractState> : CommandData {
     val oldContract: Contract
-    val newContract: UpgradedContract<S, T>
+    val newContract: Contract
+    val upgrade: ContractUpgrade<S, T>
 }
 
 interface ContractUpgradeResponse {
@@ -463,9 +464,9 @@ interface Contract {
  * more than one state).
  * @param T the new contract state
  */
-interface UpgradedContract<in S : ContractState, out T : ContractState> : Contract {
+interface ContractUpgrade<in S : ContractState, out T : ContractState> {
     /**
-     * Upgrade the another contract's state object to a state object referencing this contract.
+     * Upgrade contract's state object to a new state object.
      *
      * @throws IllegalArgumentException if the given state object is not one that can be upgraded. This can be either
      * that the class is incompatible, or that the data inside the state object cannot be upgraded for some reason.
@@ -476,7 +477,7 @@ interface UpgradedContract<in S : ContractState, out T : ContractState> : Contra
 /**
  * Convenience method for upgrading a contract state from state and reference.
  */
-fun <S : ContractState, T : ContractState> UpgradedContract<S, T>.upgrade(ref: StateAndRef<S>): T = upgrade(ref.state.data).first
+fun <S : ContractState, T : ContractState> ContractUpgrade<S, T>.upgrade(ref: StateAndRef<S>): T = upgrade(ref.state.data).first
 
 /**
  * An attachment is a ZIP (or an optionally signed JAR) that contains one or more files. Attachments are meant to

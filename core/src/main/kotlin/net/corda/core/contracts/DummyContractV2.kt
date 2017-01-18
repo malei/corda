@@ -12,7 +12,12 @@ val DUMMY_V2_PROGRAM_ID = DummyContractV2()
 /**
  * Dummy contract for testing of the upgrade process.
  */
-class DummyContractV2 : UpgradedContract<DummyContract.State, DummyContractV2.State> {
+
+object DummyContractUpgrade : ContractUpgrade<DummyContract.State, DummyContractV2.State> {
+    override fun upgrade(state: DummyContract.State) = Pair(DummyContractV2.State(state.magicNumber, state.participants), DummyContractV2.Commands.Upgrade)
+}
+
+class DummyContractV2 : Contract {
     interface Clauses {
         class Upgrade : UpgradeClause<ContractState, Commands, Unit>(State::class.java) {
             override val requiredCommands: Set<Class<out CommandData>> = setOf(Commands.Upgrade::class.java)
@@ -30,6 +35,7 @@ class DummyContractV2 : UpgradedContract<DummyContract.State, DummyContractV2.St
         object Upgrade : UpgradeCommand<DummyContract.State, DummyContractV2.State>, Commands {
             override val oldContract = DUMMY_PROGRAM_ID
             override val newContract = DUMMY_V2_PROGRAM_ID
+            override val upgrade = DummyContractUpgrade
         }
     }
 
@@ -52,12 +58,10 @@ class DummyContractV2 : UpgradedContract<DummyContract.State, DummyContractV2.St
         return Pair(TransactionType.General.Builder(notary).apply {
             states.forEach {
                 addInputState(it)
-                val (newState, command) = upgrade(it.state.data)
+                val (newState, command) = DummyContractUpgrade.upgrade(it.state.data)
                 addOutputState(newState)
                 addCommand(command, signees.toList())
             }
         }.toWireTransaction(), signees)
     }
-
-    override fun upgrade(state: DummyContract.State) = Pair(State(state.magicNumber, state.participants), Commands.Upgrade)
 }

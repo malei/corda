@@ -28,7 +28,7 @@ abstract class UpgradeClause<in S : ContractState, C : CommandData, in K : Any>(
                 "all outputs belong to the upgraded contract" by outputs.all { it.contract.javaClass == command.value.newContract.javaClass }
             }
 
-            val upgradeContract = command.value.newContract
+            val upgradeContract = command.value.upgrade
 
             for (stateIdx in 0..inputs.size - 1) {
                 val expected: ContractState = upgradeContract.upgrade(inputs[stateIdx]).first
