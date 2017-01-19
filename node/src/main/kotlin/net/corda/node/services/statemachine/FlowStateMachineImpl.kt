@@ -6,23 +6,14 @@ import co.paralleluniverse.fibers.Suspendable
 import co.paralleluniverse.strands.Strand
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
-import net.corda.core.contracts.ContractState
-import net.corda.core.contracts.StateRef
-import net.corda.core.contracts.TransactionState
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowException
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.FlowStateMachine
 import net.corda.core.flows.StateMachineRunId
-import net.corda.core.node.ServiceHub
 import net.corda.core.random63BitValue
-import net.corda.core.transactions.LedgerTransaction
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.UntrustworthyData
 import net.corda.core.utilities.trace
-import net.corda.flows.BroadcastTransactionFlow
-import net.corda.flows.FinalityFlow
-import net.corda.flows.ResolveTransactionsFlow
 import net.corda.node.services.api.ServiceHubInternal
 import net.corda.node.services.statemachine.StateMachineManager.FlowSession
 import net.corda.node.services.statemachine.StateMachineManager.FlowSessionState
@@ -39,7 +30,7 @@ import java.util.concurrent.ExecutionException
 
 class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
                               val logic: FlowLogic<R>,
-                              scheduler: FiberScheduler) : Fiber<R>("flow", scheduler), FlowStateMachine<R> {
+                              scheduler: FiberScheduler) : Fiber<Unit>("flow", scheduler), FlowStateMachine<R> {
     companion object {
         // Used to work around a small limitation in Quasar.
         private val QUASAR_UNBLOCKER = run {
@@ -57,7 +48,7 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
     // These fields shouldn't be serialised, so they are marked @Transient.
     @Transient lateinit override var serviceHub: ServiceHubInternal
     @Transient internal lateinit var actionOnSuspend: (FlowIORequest) -> Unit
-    @Transient internal lateinit var actionOnEnd: () -> Unit
+    @Transient internal lateinit var actionOnEnd: (FlowException?) -> Unit
     @Transient internal lateinit var database: Database
     @Transient internal var fromCheckpoint: Boolean = false
     @Transient internal var txTrampoline: Transaction? = null
@@ -89,26 +80,26 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
     }
 
     @Suspendable
-    override fun run(): R {
+    override fun run() {
         createTransaction()
         val result = try {
             logic.call()
         } catch (t: Throwable) {
-            actionOnEnd()
+            actionOnEnd(t as? FlowException)
             _resultFuture?.setException(t)
+            if (t is FlowException) return  // A FlowException is a valid response from a flow
             throw ExecutionException(t)
         }
 
         // This is to prevent actionOnEnd being called twice if it throws an exception
-        actionOnEnd()
+        actionOnEnd(null)
         _resultFuture?.set(result)
-        return result
     }
 
     private fun createTransaction() {
         // Make sure we have a database transaction
         createDatabaseTransaction(database)
-        logger.trace { "Starting database transaction ${TransactionManager.currentOrNull()} on ${Strand.currentStrand()}." }
+        logger.trace { "Starting database transaction ${TransactionManager.currentOrNull()} on ${Strand.currentStrand()}" }
     }
 
     internal fun commitTransaction() {
@@ -212,7 +203,7 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
             return session
         } else {
             sessionInitResponse as SessionReject
-            throw FlowException("Party $otherParty rejected session request: ${sessionInitResponse.errorMessage}")
+            throw FlowSessionException("Party $otherParty rejected session request: ${sessionInitResponse.errorMessage}")
         }
     }
 
@@ -238,8 +229,14 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
 
         if (receivedMessage.message is SessionEnd) {
             openSessions.values.remove(session)
-            throw FlowException("Party ${session.state.sendToParty} has ended their flow but we were expecting to " +
-                    "receive ${receiveRequest.receiveType.simpleName} from them")
+            if (receivedMessage.message.errorResponse != null) {
+                @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+                (receivedMessage.message.errorResponse as java.lang.Throwable).fillInStackTrace()
+                throw receivedMessage.message.errorResponse
+            } else {
+                throw FlowSessionException("${session.state.sendToParty} has ended their flow but we were expecting to " +
+                        "receive ${receiveRequest.receiveType.simpleName} from them")
+            }
         } else if (receiveRequest.receiveType.isInstance(receivedMessage.message)) {
             @Suppress("UNCHECKED_CAST")
             return receivedMessage as ReceivedSessionMessage<M>
@@ -277,7 +274,7 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
     private fun processException(t: Throwable) {
         // This can get called in actionOnSuspend *after* we commit the database transaction, so optionally open a new one here.
         createDatabaseTransaction(database)
-        actionOnEnd()
+        actionOnEnd(t as? FlowException)
         _resultFuture?.setException(t)
     }
 

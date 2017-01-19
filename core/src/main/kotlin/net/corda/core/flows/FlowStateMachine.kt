@@ -41,4 +41,3 @@ interface FlowStateMachine<R> {
     val resultFuture: ListenableFuture<R>
 }
 
-class FlowException(message: String) : RuntimeException(message)

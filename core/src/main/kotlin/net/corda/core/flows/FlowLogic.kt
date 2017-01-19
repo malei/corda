@@ -30,7 +30,7 @@ abstract class FlowLogic<out T> {
     val logger: Logger get() = stateMachine.logger
 
     /** Returns a wrapped [UUID] object that identifies this state machine run (i.e. subflows have the same identifier as their parents). */
-    val runId: StateMachineRunId get() = sessionFlow.stateMachine.id
+    val runId: StateMachineRunId get() = stateMachine.id
 
     /**
      * Provides access to big, heavy classes that may be reconstructed from time to time, e.g. across restarts. It is
@@ -71,9 +71,14 @@ abstract class FlowLogic<out T> {
      * use this when you expect to do a message swap than do use [send] and then [receive] in turn.
      *
      * @returns an [UntrustworthyData] wrapper around the received object.
+     * @throws FlowException If [otherParty] threw a [FlowException] since the last time we did a receive with them then
+     * it will propagate to us and will be thrown here. At this point the session with [otherParty] has ended and therefore
+     * be careful when doing any subsequent IO with them as it will be on a fresh new session - all previous correspondence
+     * in this [FlowLogic] instance will have been forgotten.
      */
     @Suspendable
-    open fun <T : Any> sendAndReceive(receiveType: Class<T>, otherParty: Party, payload: Any): UntrustworthyData<T> {
+    @Throws(FlowException::class)
+    open fun <R : Any> sendAndReceive(receiveType: Class<R>, otherParty: Party, payload: Any): UntrustworthyData<R> {
         return stateMachine.sendAndReceive(receiveType, otherParty, payload, sessionFlow)
     }
 
@@ -92,9 +97,16 @@ abstract class FlowLogic<out T> {
      * Remember that when receiving data from other parties the data should not be trusted until it's been thoroughly
      * verified for consistency and that all expectations are satisfied, as a malicious peer may send you subtly
      * corrupted data in order to exploit your code.
+     *
+     * @returns an [UntrustworthyData] wrapper around the received object.
+     * @throws FlowException If [otherParty] threw a [FlowException] since the last time we did a receive with them then
+     * it will propagate to us and will be thrown here. At this point the session with [otherParty] has ended and therefore
+     * be careful when doing any subsequent IO with them as it will be on a fresh new session - all previous correspondence
+     * in this [FlowLogic] instance will have been forgotten.
      */
     @Suspendable
-    open fun <T : Any> receive(receiveType: Class<T>, otherParty: Party): UntrustworthyData<T> {
+    @Throws(FlowException::class)
+    open fun <R : Any> receive(receiveType: Class<R>, otherParty: Party): UntrustworthyData<R> {
         return stateMachine.receive(receiveType, otherParty, sessionFlow)
     }
 
@@ -116,11 +128,15 @@ abstract class FlowLogic<out T> {
      * @param shareParentSessions In certain situations the need arises to use the same sessions the parent flow has
      * already established. However this also prevents the subflow from creating new sessions with those parties.
      * For this reason the default value is false.
+     *
+     * @throws FlowException This is either thrown by [subLogic] itself or propagated from any of the remote
+     * [FlowLogic]s it communicated with.
      */
     // TODO Rethink the default value for shareParentSessions
     // TODO shareParentSessions is a bit too low-level and perhaps can be expresed in a better way
     @Suspendable
     @JvmOverloads
+    @Throws(FlowException::class)
     open fun <R> subFlow(subLogic: FlowLogic<R>, shareParentSessions: Boolean = false): R {
         subLogic.stateMachine = stateMachine
         maybeWireUpProgressTracking(subLogic)
@@ -149,7 +165,19 @@ abstract class FlowLogic<out T> {
      * helpful if this flow is meant to be used as a subflow.
      */
     @Suspendable
+    @Throws(FlowException::class)
     abstract fun call(): T
+
+    /**
+     * Throws an [IllegalDataException] with the message produced by [lazyMessage] if [value] is false. This is
+     * used to check data received from another flow is correct and to let them know if it's not.
+     */
+    @Throws(IllegalDataException::class)
+    protected fun checkData(value: Boolean, lazyMessage: () -> Any): Unit {
+        if (!value) {
+            throw IllegalDataException(lazyMessage().toString())
+        }
+    }
 
     /**
      * Returns a pair of the current progress step, as a string, and an observable of stringified changes to the
@@ -181,7 +209,6 @@ abstract class FlowLogic<out T> {
 
     private fun maybeWireUpProgressTracking(subLogic: FlowLogic<*>) {
         val ours = progressTracker
-
         val theirs = subLogic.progressTracker
         if (ours != null && theirs != null) {
             if (ours.currentStep == ProgressTracker.UNSTARTED) {

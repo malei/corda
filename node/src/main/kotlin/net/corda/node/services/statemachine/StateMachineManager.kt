@@ -12,6 +12,7 @@ import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.commonName
+import net.corda.core.flows.FlowException
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.FlowStateMachine
 import net.corda.core.flows.StateMachineRunId
@@ -256,7 +257,7 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
             if (peerParty != null) {
                 if (message is SessionConfirm) {
                     logger.debug { "Received session confirmation but associated fiber has already terminated, so sending session end" }
-                    sendSessionMessage(peerParty, SessionEnd(message.initiatedSessionId))
+                    sendSessionMessage(peerParty, SessionEnd(message.initiatedSessionId, null))
                 } else {
                     logger.trace { "Ignoring session end message for already closed session: $message" }
                 }
@@ -269,30 +270,44 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
     private fun onSessionInit(sessionInit: SessionInit, sender: Party) {
         logger.trace { "Received $sessionInit $sender" }
         val otherPartySessionId = sessionInit.initiatorSessionId
-        try {
-            val markerClass = Class.forName(sessionInit.flowName)
-            val flowFactory = serviceHub.getFlowFactory(markerClass)
-            if (flowFactory != null) {
-                val flow = flowFactory(sender)
-                val fiber = createFiber(flow)
-                val session = FlowSession(flow, random63BitValue(), FlowSessionState.Initiated(sender, otherPartySessionId))
-                if (sessionInit.firstPayload != null) {
-                    session.receivedMessages += ReceivedSessionMessage(sender, SessionData(session.ourSessionId, sessionInit.firstPayload))
-                }
-                openSessions[session.ourSessionId] = session
-                fiber.openSessions[Pair(flow, sender)] = session
-                updateCheckpoint(fiber)
-                sendSessionMessage(sender, SessionConfirm(otherPartySessionId, session.ourSessionId), fiber)
-                fiber.logger.debug { "Initiated from $sessionInit on $session" }
-                startFiber(fiber)
-            } else {
-                logger.warn("Unknown flow marker class in $sessionInit")
-                sendSessionMessage(sender, SessionReject(otherPartySessionId, "Don't know ${markerClass.name}"))
-            }
+
+        fun sendSessionReject(message: String) = sendSessionMessage(sender, SessionReject(otherPartySessionId, message))
+
+        val markerClass = try {
+            Class.forName(sessionInit.flowName)
         } catch (e: Exception) {
             logger.warn("Received invalid $sessionInit", e)
-            sendSessionMessage(sender, SessionReject(otherPartySessionId, "Unable to establish session"))
+            sendSessionReject("Don't know ${sessionInit.flowName}")
+            return
         }
+
+        val flowFactory = serviceHub.getFlowFactory(markerClass)
+        if (flowFactory == null) {
+            logger.warn("Unknown flow marker class in $sessionInit")
+            sendSessionReject("Don't know ${markerClass.name}")
+            return
+        }
+
+        val session = try {
+            val flow = flowFactory(sender)
+            val fiber = createFiber(flow)
+            val session = FlowSession(flow, random63BitValue(), FlowSessionState.Initiated(sender, otherPartySessionId))
+            if (sessionInit.firstPayload != null) {
+                session.receivedMessages += ReceivedSessionMessage(sender, SessionData(session.ourSessionId, sessionInit.firstPayload))
+            }
+            openSessions[session.ourSessionId] = session
+            fiber.openSessions[Pair(flow, sender)] = session
+            updateCheckpoint(fiber)
+            session
+        } catch (e: Exception) {
+            logger.warn("Couldn't start session for $sessionInit", e)
+            sendSessionReject("Unable to establish session")
+            return
+        }
+
+        sendSessionMessage(sender, SessionConfirm(otherPartySessionId, session.ourSessionId), session.fiber)
+        session.fiber.logger.debug { "Initiated from $sessionInit on $session" }
+        startFiber(session.fiber)
     }
 
     private fun serializeFiber(fiber: FlowStateMachineImpl<*>): SerializedBytes<FlowStateMachineImpl<*>> {
@@ -330,14 +345,14 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
             processIORequest(ioRequest)
             decrementLiveFibers()
         }
-        fiber.actionOnEnd = {
+        fiber.actionOnEnd = { errorResponse: FlowException? ->
             try {
                 fiber.logic.progressTracker?.currentStep = ProgressTracker.DONE
                 mutex.locked {
                     stateMachines.remove(fiber)?.let { checkpointStorage.removeCheckpoint(it) }
                     notifyChangeObservers(fiber, AddOrRemove.REMOVE)
                 }
-                endAllFiberSessions(fiber)
+                endAllFiberSessions(fiber, errorResponse)
             } finally {
                 fiber.commitTransaction()
                 decrementLiveFibers()
@@ -352,12 +367,15 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
         }
     }
 
-    private fun endAllFiberSessions(fiber: FlowStateMachineImpl<*>) {
+    private fun endAllFiberSessions(fiber: FlowStateMachineImpl<*>, errorResponse: FlowException?) {
         openSessions.values.removeIf { session ->
             if (session.fiber == fiber) {
                 val initiatedState = session.state as? FlowSessionState.Initiated
                 if (initiatedState != null) {
-                    sendSessionMessage(initiatedState.peerParty, SessionEnd(initiatedState.peerSessionId), fiber)
+                    sendSessionMessage(
+                            initiatedState.peerParty,
+                            SessionEnd(initiatedState.peerSessionId, errorResponse),
+                            fiber)
                     recentlyClosedSessions[session.ourSessionId] = initiatedState.peerParty
                 }
                 true
