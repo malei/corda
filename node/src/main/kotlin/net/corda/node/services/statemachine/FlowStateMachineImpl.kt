@@ -6,23 +6,14 @@ import co.paralleluniverse.fibers.Suspendable
 import co.paralleluniverse.strands.Strand
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
-import net.corda.core.contracts.ContractState
-import net.corda.core.contracts.StateRef
-import net.corda.core.contracts.TransactionState
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowException
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.FlowStateMachine
 import net.corda.core.flows.StateMachineRunId
-import net.corda.core.node.ServiceHub
 import net.corda.core.random63BitValue
-import net.corda.core.transactions.LedgerTransaction
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.UntrustworthyData
 import net.corda.core.utilities.trace
-import net.corda.flows.BroadcastTransactionFlow
-import net.corda.flows.FinalityFlow
-import net.corda.flows.ResolveTransactionsFlow
 import net.corda.node.services.api.ServiceHubInternal
 import net.corda.node.services.statemachine.StateMachineManager.FlowSession
 import net.corda.node.services.statemachine.StateMachineManager.FlowSessionState
@@ -258,16 +249,15 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
         parkAndSerialize { fiber, serializer ->
             logger.trace { "Suspended on $ioRequest" }
             // restore the Tx onto the ThreadLocal so that we can commit the ensuing checkpoint to the DB
-            StrandLocalTransactionManager.setThreadLocalTx(txTrampoline)
-            txTrampoline = null
             try {
+                StrandLocalTransactionManager.setThreadLocalTx(txTrampoline)
+                txTrampoline = null
                 actionOnSuspend(ioRequest)
             } catch (t: Throwable) {
-                // Do not throw exception again - Quasar completely bins it.
-                logger.warn("Captured exception which was swallowed by Quasar for $logic at ${fiber.stackTrace.toList().joinToString("\n")}", t)
-                // TODO When error handling is introduced, look into whether we should be deleting the checkpoint and
-                // completing the Future
+                // Exceptions thrown here are not captured by our exception handling in run() so we have to process it
+                // manually here
                 processException(t)
+                throw t
             }
         }
         logger.trace { "Resumed from $ioRequest" }
