@@ -25,7 +25,7 @@ class UniversalContract : Contract {
 
         // replace parties
         // must be signed by all parties present in contract before and after command
-        class Move(val from: Party, val to: Party) : TypeOnlyCommandData(), Commands
+        class Move(val from: Party.Full, val to: Party.Full) : TypeOnlyCommandData(), Commands
 
         // must be signed by all liable parties present in contract
         class Issue : TypeOnlyCommandData(), Commands
@@ -250,7 +250,7 @@ class UniversalContract : Contract {
                     "the transaction is signed by all liable parties" by
                             (liableParties(outState.details).all { it in cmd.signers })
                     "output state does not reflect move command" by
-                            (replaceParty.Full(inState.details, value.from, value.to).equals(outState.details))
+                            (replaceParty(inState.details, value.from, value.to).equals(outState.details))
                 }
             }
             is Commands.Fix -> {

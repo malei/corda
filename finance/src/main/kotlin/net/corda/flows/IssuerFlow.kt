@@ -24,13 +24,13 @@ import java.util.*
  *  useful for creation of fake assets.
  */
 object IssuerFlow {
-    data class IssuanceRequestState(val amount: Amount<Currency>, val issueToParty: Party, val issuerPartyRef: OpaqueBytes)
+    data class IssuanceRequestState(val amount: Amount<Currency>, val issueToParty: Party.Full, val issuerPartyRef: OpaqueBytes)
 
     /**
      * IssuanceRequester should be used by a client to ask a remote note to issue some [FungibleAsset] with the given details.
      * Returns the transaction created by the Issuer to move the cash to the Requester.
      */
-    class IssuanceRequester(val amount: Amount<Currency>, val issueToParty: Party, val issueToPartyRef: OpaqueBytes,
+    class IssuanceRequester(val amount: Amount<Currency>, val issueToParty: Party.Full, val issueToPartyRef: OpaqueBytes,
                             val issuerBankParty: Party): FlowLogic<SignedTransaction>() {
         @Suspendable
         override fun call(): SignedTransaction {
@@ -50,7 +50,7 @@ object IssuerFlow {
      * Issuer refers to a Node acting as a Bank Issuer of [FungibleAsset], and processes requests from a [IssuanceRequester] client.
      * Returns the generated transaction representing the transfer of the [Issued] [FungibleAsset] to the issue requester.
      */
-    class Issuer(val otherParty: Party): FlowLogic<SignedTransaction>() {
+    class Issuer(val otherParty: Party.Full): FlowLogic<SignedTransaction>() {
         override val progressTracker: ProgressTracker = tracker()
         companion object {
             object AWAITING_REQUEST : ProgressTracker.Step("Awaiting issuance request")
@@ -79,7 +79,7 @@ object IssuerFlow {
         //       state references (thus causing Notarisation double spend exceptions).
         @Suspendable
         private fun issueCashTo(amount: Amount<Currency>,
-                                issueTo: Party, issuerPartyRef: OpaqueBytes): SignedTransaction {
+                                issueTo: Party.Full, issuerPartyRef: OpaqueBytes): SignedTransaction {
             // TODO: pass notary in as request parameter
             val notaryParty = serviceHub.networkMapCache.notaryNodes[0].notaryIdentity
             // invoke Cash subflow to issue Asset
@@ -94,7 +94,7 @@ object IssuerFlow {
                     throw Exception(resultIssue.message)
                 }
                 // short-circuit when issuing to self
-                if (issueTo.equals(serviceHub.myInfo.legalIdentity))
+                if (issueTo == serviceHub.myInfo.legalIdentity)
                     return (resultIssue as CashFlowResult.Success).transaction!!
                 // now invoke Cash subflow to Move issued assetType to issue requester
                 progressTracker.currentStep = TRANSFERRING

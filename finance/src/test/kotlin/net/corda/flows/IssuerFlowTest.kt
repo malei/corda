@@ -52,7 +52,7 @@ class IssuerFlowTest {
     }
 
     private fun runIssuerAndIssueRequester(amount: Amount<Currency>, issueToPartyAndRef: PartyAndReference) : RunResult {
-        val resolvedIssuerParty = issueToPartyAndRef.party.resolveParty.Full(bankOfCordaNode.services.identityService) ?: throw IllegalStateException()
+        val resolvedIssuerParty = issueToPartyAndRef.party.resolveParty(bankOfCordaNode.services.identityService) ?: throw IllegalStateException()
         val issuerFuture = bankOfCordaNode.initiateSingleShotFlow(IssuerFlow.IssuanceRequester::class) {
             otherParty -> IssuerFlow.Issuer(resolvedIssuerParty)
         }.map { it.stateMachine }

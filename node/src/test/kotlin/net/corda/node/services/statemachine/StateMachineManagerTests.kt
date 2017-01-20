@@ -296,32 +296,32 @@ class StateMachineManagerTests {
                     // First Pay
                     expect(match = { it.message is SessionInit && it.message.flowName == NotaryFlow.Client::class.java.name }) {
                         it.message as SessionInit
-                        require(it.from == node1.id)
-                        require(it.to == TransferRecipient.Service(notary1.info.notaryIdentity))
+                        assertEquals(node1.id, it.from)
+                        assertEquals(TransferRecipient.Service(notary1.info.notaryIdentity), it.to)
                     },
                     expect(match = { it.message is SessionConfirm }) {
                         it.message as SessionConfirm
-                        require(it.from == notary1.id)
+                        assertEquals(node1.id, it.from)
                     },
                     // Second pay
                     expect(match = { it.message is SessionInit && it.message.flowName == NotaryFlow.Client::class.java.name }) {
                         it.message as SessionInit
-                        require(it.from == node1.id)
-                        require(it.to == TransferRecipient.Service(notary1.info.notaryIdentity))
+                        assertEquals(node1.id, it.from)
+                        assertEquals(TransferRecipient.Service(notary1.info.notaryIdentity), it.to)
                     },
                     expect(match = { it.message is SessionConfirm }) {
                         it.message as SessionConfirm
-                        require(it.from == notary2.id)
+                        assertEquals(node2.id, it.from)
                     },
                     // Third pay
                     expect(match = { it.message is SessionInit && it.message.flowName == NotaryFlow.Client::class.java.name }) {
                         it.message as SessionInit
-                        require(it.from == node1.id)
-                        require(it.to == TransferRecipient.Service(notary1.info.notaryIdentity))
+                        assertEquals(node1.id, it.from)
+                        assertEquals(TransferRecipient.Service(notary1.info.notaryIdentity), it.to)
                     },
                     expect(match = { it.message is SessionConfirm }) {
                         it.message as SessionConfirm
-                        require(it.from == notary1.id)
+                        assertEquals(node1.id, it.from)
                     }
             )
         }
@@ -374,7 +374,7 @@ class StateMachineManagerTests {
 
     private interface TransferRecipient {
         data class Peer(val id: Int) : TransferRecipient
-        data class Service(val identity: Party) : TransferRecipient
+        data class Service(val identity: Party.Full) : TransferRecipient
     }
 
     private data class SessionTransfer(val from: Int, val message: SessionMessage, val to: TransferRecipient) {
@@ -388,7 +388,7 @@ class StateMachineManagerTests {
             val message = it.message.data.deserialize<SessionMessage>()
             val recipients = it.recipients
             val to = when (recipients) {
-                is InMemoryMessagingNetwork.PeerHandle -> TransferRecipient.Peer(recipients.id)
+                // is InMemoryMessagingNetwork.PeerHandle -> TransferRecipient.Peer(recipients.id)
                 is InMemoryMessagingNetwork.ServiceHandle -> TransferRecipient.Service(recipients.service.identity)
                 else -> throw IllegalStateException("Unknown recipients $recipients")
             }

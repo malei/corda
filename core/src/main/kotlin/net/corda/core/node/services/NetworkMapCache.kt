@@ -98,7 +98,7 @@ interface NetworkMapCache {
      * Returns a notary identity advertised by any of the nodes on the network (chosen at random)
      * @param type Limits the result to notaries of the specified type (optional)
      */
-    fun getAnyNotary(type: ServiceType? = null): Party? {
+    fun getAnyNotary(type: ServiceType? = null): Party.Full? {
         val nodes = if (type == null) {
             notaryNodes
         } else {

@@ -156,7 +156,7 @@ sealed class CashCommand {
      * @param recipient the party to issue the cash to.
      */
     class PayCash(val amount: Amount<Issued<Currency>>, val recipient: Party.Anonymised) : CashCommand() {
-        constructor(amount: Amount<Issued<Currency>>, recipient: Party) : this(amount, recipient.toState())
+        constructor(amount: Amount<Issued<Currency>>, recipient: Party.Full) : this(amount, recipient.toState())
     }
 
     /**

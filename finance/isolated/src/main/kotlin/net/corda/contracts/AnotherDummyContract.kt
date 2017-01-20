@@ -4,7 +4,6 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
-import net.corda.core.crypto.StateParty
 import net.corda.core.transactions.TransactionBuilder
 
 // The dummy contract doesn't do anything useful. It exists for testing purposes.
@@ -16,7 +15,6 @@ class AnotherDummyContract : Contract, net.corda.core.node.DummyContractBackdoor
         override val contract = ANOTHER_DUMMY_PROGRAM_ID
         override val participants: List<CompositeKey>
             get() = emptyList()
-        override val partiesToResolve: Collection<StateParty> = emptyList()
     }
 
     interface Commands : CommandData {
@@ -30,7 +28,7 @@ class AnotherDummyContract : Contract, net.corda.core.node.DummyContractBackdoor
     // The "empty contract"
     override val legalContractReference: SecureHash = SecureHash.sha256("https://anotherdummy.org")
 
-    override fun generateInitial(owner: PartyAndReference, magicNumber: Int, notary: Party): TransactionBuilder {
+    override fun generateInitial(owner: PartyAndReference, magicNumber: Int, notary: Party.Full): TransactionBuilder {
         val state = State(magicNumber)
         return TransactionType.General.Builder(notary = notary).withItems(state, Command(Commands.Create(), owner.party.owningKey))
     }
