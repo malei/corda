@@ -36,10 +36,10 @@ object JsonSupport {
 
     val cordaModule : Module by lazy {
         SimpleModule("core").apply {
-            addSerializer(Party::class.java, PartySerializer)
-            addDeserializer(Party::class.java, PartyDeserializer)
-            addSerializer(StateParty::class.java, StatePartySerializer)
-            addDeserializer(StateParty::class.java, StatePartyDeserializer)
+            addSerializer(Party.Full::class.java, PartySerializer)
+            addDeserializer(Party.Full::class.java, PartyDeserializer)
+            addSerializer(Party.Anonymised::class.java, PartyAnonymisedSerializer)
+            addDeserializer(Party.Anonymised::class.java, PartyAnonymisedDeserializer)
             addSerializer(BigDecimal::class.java, ToStringSerializer)
             addDeserializer(BigDecimal::class.java, NumberDeserializers.BigDecimalDeserializer())
             addSerializer(SecureHash::class.java, SecureHashSerializer)
@@ -99,14 +99,14 @@ object JsonSupport {
 
     }
 
-    object PartySerializer : JsonSerializer<Party>() {
-        override fun serialize(obj: Party, generator: JsonGenerator, provider: SerializerProvider) {
+    object PartySerializer : JsonSerializer<Party.Full>() {
+        override fun serialize(obj: Party.Full, generator: JsonGenerator, provider: SerializerProvider) {
             generator.writeString(obj.name)
         }
     }
 
-    object PartyDeserializer : JsonDeserializer<Party>() {
-        override fun deserialize(parser: JsonParser, context: DeserializationContext): Party {
+    object PartyDeserializer : JsonDeserializer<Party.Full>() {
+        override fun deserialize(parser: JsonParser, context: DeserializationContext): Party.Full {
             if (parser.currentToken == JsonToken.FIELD_NAME) {
                 parser.nextToken()
             }
@@ -116,20 +116,20 @@ object JsonSupport {
         }
     }
 
-    object StatePartySerializer : JsonSerializer<StateParty>() {
-        override fun serialize(obj: StateParty, generator: JsonGenerator, provider: SerializerProvider) {
-            generator.writeString(obj.name)
+    object PartyAnonymisedSerializer : JsonSerializer<Party.Anonymised>() {
+        override fun serialize(obj: Party.Anonymised, generator: JsonGenerator, provider: SerializerProvider) {
+            generator.writeString(obj.owningKey.toBase58String())
         }
     }
 
-    object StatePartyDeserializer : JsonDeserializer<StateParty>() {
-        override fun deserialize(parser: JsonParser, context: DeserializationContext): StateParty {
+    object PartyAnonymisedDeserializer : JsonDeserializer<Party.Anonymised>() {
+        override fun deserialize(parser: JsonParser, context: DeserializationContext): Party.Anonymised {
             if (parser.currentToken == JsonToken.FIELD_NAME) {
                 parser.nextToken()
             }
+            val key = CompositeKey.parseFromBase58(parser.text)
             val mapper = parser.codec as ServiceHubObjectMapper
-            // TODO this needs to use some industry identifier(s) not just these human readable names
-            return mapper.identities.partyFromName(parser.text)?.toState() ?: throw JsonParseException(parser, "Could not find a Party with key: ${parser.text}")
+            return mapper.identities.partyFromKey(key)?.toState() ?: throw JsonParseException(parser, "Could not find a Party with key: ${parser.text}")
         }
     }
 

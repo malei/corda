@@ -82,7 +82,7 @@ interface DriverDSLExposedInterface {
             notaryName: String,
             clusterSize: Int = 3,
             type: ServiceType = RaftValidatingNotaryService.type,
-            rpcUsers: List<User> = emptyList()): Future<Pair<Party, List<NodeHandle>>>
+            rpcUsers: List<User> = emptyList()): Future<Pair<Party.Full, List<NodeHandle>>>
 
     fun waitForAllNodesToFinish()
 }
@@ -387,7 +387,7 @@ open class DriverDSL(
             clusterSize: Int,
             type: ServiceType,
             rpcUsers: List<User>
-    ): ListenableFuture<Pair<Party, List<NodeHandle>>> {
+    ): ListenableFuture<Pair<Party.Full, List<NodeHandle>>> {
         val nodeNames = (1..clusterSize).map { "Notary Node $it" }
         val paths = nodeNames.map { driverDirectory / it }
         ServiceIdentityGenerator.generateToDisk(paths, type.id, notaryName)

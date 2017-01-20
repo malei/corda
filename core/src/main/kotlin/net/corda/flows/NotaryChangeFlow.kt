@@ -20,18 +20,18 @@ import net.corda.flows.NotaryChangeFlow.Instigator
  * Finally, [Instigator] sends the transaction containing all signatures back to each participant so they can record it and
  * use the new updated state for future transactions.
  */
-object NotaryChangeFlow : AbstractStateReplacementFlow<Party>() {
+object NotaryChangeFlow : AbstractStateReplacementFlow<Party.Full>() {
 
     data class Proposal(override val stateRef: StateRef,
-                        override val modification: Party,
-                        override val stx: SignedTransaction) : AbstractStateReplacementFlow.Proposal<Party>
+                        override val modification: Party.Full,
+                        override val stx: SignedTransaction) : AbstractStateReplacementFlow.Proposal<Party.Full>
 
     class Instigator<T : ContractState>(originalState: StateAndRef<T>,
-                                        newNotary: Party,
+                                        newNotary: Party.Full,
                                         progressTracker: ProgressTracker = tracker())
-        : AbstractStateReplacementFlow.Instigator<T, Party>(originalState, newNotary, progressTracker) {
+        : AbstractStateReplacementFlow.Instigator<T, Party.Full>(originalState, newNotary, progressTracker) {
 
-        override fun assembleProposal(stateRef: StateRef, modification: Party, stx: SignedTransaction): AbstractStateReplacementFlow.Proposal<Party>
+        override fun assembleProposal(stateRef: StateRef, modification: Party.Full, stx: SignedTransaction): AbstractStateReplacementFlow.Proposal<Party.Full>
                 = Proposal(stateRef, modification, stx)
 
         override fun assembleTx(): Pair<SignedTransaction, Iterable<CompositeKey>> {
@@ -96,9 +96,9 @@ object NotaryChangeFlow : AbstractStateReplacementFlow<Party>() {
 
     }
 
-    class Acceptor(otherSide: Party,
+    class Acceptor(otherSide: Party.Full,
                    override val progressTracker: ProgressTracker = tracker())
-        : AbstractStateReplacementFlow.Acceptor<Party>(otherSide) {
+        : AbstractStateReplacementFlow.Acceptor<Party.Full>(otherSide) {
 
         /**
          * Check the notary change proposal.
@@ -108,7 +108,7 @@ object NotaryChangeFlow : AbstractStateReplacementFlow<Party>() {
          * TODO: In more difficult cases this should call for human attention to manually verify and approve the proposal
          */
         @Suspendable
-        override fun verifyProposal(maybeProposal: UntrustworthyData<AbstractStateReplacementFlow.Proposal<Party>>): AbstractStateReplacementFlow.Proposal<Party> {
+        override fun verifyProposal(maybeProposal: UntrustworthyData<AbstractStateReplacementFlow.Proposal<Party.Full>>): AbstractStateReplacementFlow.Proposal<Party.Full> {
             return maybeProposal.unwrap { proposal ->
                 val newNotary = proposal.modification
                 val isNotary = serviceHub.networkMapCache.notaryNodes.any { it.notaryIdentity == newNotary }

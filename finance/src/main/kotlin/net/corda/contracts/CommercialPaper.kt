@@ -10,7 +10,6 @@ import net.corda.core.contracts.clauses.verifyClause
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
-import net.corda.core.crypto.StateParty
 import net.corda.core.node.services.VaultService
 import net.corda.core.random63BitValue
 import net.corda.core.schemas.MappedSchema
@@ -65,7 +64,6 @@ class CommercialPaper : Contract {
             val maturityDate: Instant
     ) : OwnableState, QueryableState, ICommercialPaperState {
         override val contract = CP_PROGRAM_ID
-        override val partiesToResolve: Collection<StateParty> get() = listOf(issuance.party)
         override val participants: List<CompositeKey> get() = listOf(owner)
 
         val token: Issued<Terms>
@@ -193,7 +191,7 @@ class CommercialPaper : Contract {
      * an existing transaction because you aren't able to issue multiple pieces of CP in a single transaction
      * at the moment: this restriction is not fundamental and may be lifted later.
      */
-    fun generateIssue(issuance: PartyAndReference, faceValue: Amount<Issued<Currency>>, maturityDate: Instant, notary: Party): TransactionBuilder {
+    fun generateIssue(issuance: PartyAndReference, faceValue: Amount<Issued<Currency>>, maturityDate: Instant, notary: Party.Full): TransactionBuilder {
         val state = TransactionState(State(issuance, issuance.party.owningKey, faceValue, maturityDate), notary)
         return TransactionType.General.Builder(notary = notary).withItems(state, Command(Commands.Issue(), issuance.party.owningKey))
     }
@@ -225,7 +223,7 @@ class CommercialPaper : Contract {
 }
 
 infix fun CommercialPaper.State.`owned by`(owner: CompositeKey) = copy(owner = owner)
-infix fun CommercialPaper.State.`with notary`(notary: Party) = TransactionState(this, notary)
+infix fun CommercialPaper.State.`with notary`(notary: Party.Full) = TransactionState(this, notary)
 infix fun ICommercialPaperState.`owned by`(newOwner: CompositeKey) = withOwner(newOwner)
 
 

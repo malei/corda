@@ -4,7 +4,6 @@ import net.corda.core.contracts.clauses.Clause
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
-import net.corda.core.crypto.StateParty
 import net.corda.core.flows.FlowLogicRef
 import net.corda.core.flows.FlowLogicRefFactory
 import net.corda.core.node.services.ServiceType
@@ -115,12 +114,6 @@ interface ContractState {
      * list should just contain the owner.
      */
     val participants: List<CompositeKey>
-
-    /**
-     * The collection of parties to be resolved during deserialization. The Corda framework will try to resolve these
-     * parties before handing control to the validation logic.
-     */
-    val partiesToResolve: Collection<StateParty> get() = emptySet()
 }
 
 /**
@@ -131,7 +124,7 @@ data class TransactionState<out T : ContractState> @JvmOverloads constructor(
         /** The custom contract state */
         val data: T,
         /** Identity of the notary that ensures the state is not used as an input to a transaction more than once */
-        val notary: Party,
+        val notary: Party.Full,
         /**
          * All contract states may be _encumbered_ by up to one other state.
          *
@@ -155,13 +148,13 @@ data class TransactionState<out T : ContractState> @JvmOverloads constructor(
      * Copies the underlying state, replacing the notary field with the new value.
      * To replace the notary, we need an approval (signature) from _all_ participants of the [ContractState].
      */
-    fun withNotary(newNotary: Party) = TransactionState(this.data, newNotary, encumbrance)
+    fun withNotary(newNotary: Party.Full) = TransactionState(this.data, newNotary, encumbrance)
 }
 
 /** Wraps the [ContractState] in a [TransactionState] object */
-infix fun <T : ContractState> T.`with notary`(newNotary: Party) = withNotary(newNotary)
+infix fun <T : ContractState> T.`with notary`(newNotary: Party.Full) = withNotary(newNotary)
 
-infix fun <T : ContractState> T.withNotary(newNotary: Party) = TransactionState(this, newNotary)
+infix fun <T : ContractState> T.withNotary(newNotary: Party.Full) = TransactionState(this, newNotary)
 
 /**
  * Marker interface for data classes that represent the issuance state for a contract. These are intended as templates
@@ -287,7 +280,7 @@ interface DealState : LinearState {
      * Exposes the Parties involved in a generic way.
      *
      * Appears to duplicate [participants] a property of [ContractState]. However [participants] only holds public keys.
-     * Currently we need to hard code Party objects into [ContractState]s. [StateParty] objects are a wrapper for public
+     * Currently we need to hard code Party objects into [ContractState]s. [Party.Anonymised] objects are a wrapper for public
      * keys which also contain some identity information about the public key owner. You can keep track of individual
      * parties by adding a property for each one to the state, or you can append parties to the [parties] list if you
      * are implementing [DealState]. We need to do this as identity management in Corda is currently incomplete,
@@ -296,8 +289,7 @@ interface DealState : LinearState {
      * separate process exchange certificates to ascertain identities. Thus decoupling identities from
      * [ContractState]s.
      * */
-    val parties: List<StateParty>
-    override val partiesToResolve: Collection<StateParty> get() = parties
+    val parties: List<Party.Anonymised>
 
     /**
      * Generate a partial transaction representing an agreement (command) to this deal, allowing a general
@@ -308,7 +300,7 @@ interface DealState : LinearState {
      * TODO: This should more likely be a method on the Contract (on a common interface) and the changes to reference a
      * Contract instance from a ContractState are imminent, at which point we can move this out of here.
      */
-    fun generateAgreement(notary: Party): TransactionBuilder
+    fun generateAgreement(notary: Party.Full): TransactionBuilder
 }
 
 /**
@@ -357,13 +349,9 @@ inline fun <reified T : ContractState> Iterable<StateAndRef<ContractState>>.filt
  * Reference to something being stored or issued by a party e.g. in a vault or (more likely) on their normal
  * ledger. The reference is intended to be encrypted so it's meaningless to anyone other than the party.
  */
-data class PartyAndReference(val party: StateParty, val reference: OpaqueBytes) {
+data class PartyAndReference(val party: Party.Anonymised, val reference: OpaqueBytes) {
     constructor(party: Party, reference: OpaqueBytes) : this(party.toState(), reference)
-    override fun toString() = if (party.party?.name != null) {
-        "${party.party!!.name}$reference"
-    } else {
-        "${party.owningKey.toBase58String()}${reference}"
-    }
+    override fun toString() = "${party.owningKey.toBase58String()}${reference}"
 }
 
 /** Marker interface for classes that represent commands */

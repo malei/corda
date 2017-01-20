@@ -66,33 +66,33 @@ private fun involvedPartiesVisitor(arrangement: Arrangement): ImmutableSet<Party
 /** returns list of involved parties for a given contract */
 fun involvedParties(arrangement: Arrangement): Set<Party> = involvedPartiesVisitor(arrangement)
 
-fun replaceParty(perceivable: Perceivable<Boolean>, from: Party, to: Party): Perceivable<Boolean> =
+fun replaceParty.Full(perceivable: Perceivable<Boolean>, from: Party, to: Party): Perceivable<Boolean> =
         when (perceivable) {
             is ActorPerceivable ->
                 if (perceivable.actor == from)
                     signedBy(to)
                 else
                     perceivable
-            is PerceivableAnd -> replaceParty(perceivable.left, from, to) and replaceParty(perceivable.right, from, to)
-            is PerceivableOr -> replaceParty(perceivable.left, from, to) or replaceParty(perceivable.right, from, to)
+            is PerceivableAnd -> replaceParty.Full(perceivable.left, from, to) and replaceParty.Full(perceivable.right, from, to)
+            is PerceivableOr -> replaceParty.Full(perceivable.left, from, to) or replaceParty.Full(perceivable.right, from, to)
             is TimePerceivable -> perceivable
             else -> throw IllegalArgumentException("replaceParty " + perceivable)
         }
 
-fun replaceParty(action: Action, from: Party, to: Party): Action =
-        Action(action.name, replaceParty(action.condition, from, to), replaceParty(action.arrangement, from, to))
+fun replaceParty.Full(action: Action, from: Party, to: Party): Action =
+        Action(action.name, replaceParty.Full(action.condition, from, to), replaceParty.Full(action.arrangement, from, to))
         //if (action.actors.contains(from)) {
-        //    Action(action.name, action.condition, action.actors - from + to, replaceParty(action.arrangement, from, to))
+        //    Action(action.name, action.condition, action.actors - from + to, replaceParty.Full(action.arrangement, from, to))
         //} else
-        //    Action(action.name, action.condition, replaceParty(action.arrangement, from, to))
+        //    Action(action.name, action.condition, replaceParty.Full(action.arrangement, from, to))
 
-fun replaceParty(arrangement: Arrangement, from: Party, to: Party): Arrangement = when (arrangement) {
+fun replaceParty.Full(arrangement: Arrangement, from: Party, to: Party): Arrangement = when (arrangement) {
     is Zero -> arrangement
     is Obligation -> Obligation(arrangement.amount, arrangement.currency,
             if (arrangement.from == from) to else arrangement.from,
             if (arrangement.to == from) to else arrangement.to)
-    is And -> And(arrangement.arrangements.map { replaceParty(it, from, to) }.toSet())
-    is Actions -> Actions(arrangement.actions.map { replaceParty(it, from, to) }.toSet())
+    is And -> And(arrangement.arrangements.map { replaceParty.Full(it, from, to) }.toSet())
+    is Actions -> Actions(arrangement.actions.map { replaceParty.Full(it, from, to) }.toSet())
     else -> throw IllegalArgumentException()
 }
 

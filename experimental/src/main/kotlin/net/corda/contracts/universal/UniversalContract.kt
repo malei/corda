@@ -250,7 +250,7 @@ class UniversalContract : Contract {
                     "the transaction is signed by all liable parties" by
                             (liableParties(outState.details).all { it in cmd.signers })
                     "output state does not reflect move command" by
-                            (replaceParty(inState.details, value.from, value.to).equals(outState.details))
+                            (replaceParty.Full(inState.details, value.from, value.to).equals(outState.details))
                 }
             }
             is Commands.Fix -> {

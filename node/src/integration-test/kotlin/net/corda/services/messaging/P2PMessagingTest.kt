@@ -41,7 +41,7 @@ class P2PMessagingTest : NodeBasedTest() {
         networkMapNode.respondWith("Hello")
         val alice = startNode("Alice").getOrThrow()
         val serviceAddress = alice.services.networkMapCache.run {
-            alice.net.getAddressOfParty(getPartyInfo(getAnyNotary()!!)!!)
+            alice.net.getAddressOfParty.Full(getPartyInfo(getAnyNotary()!!)!!)
         }
         val received = alice.receiveFrom(serviceAddress).getOrThrow(10.seconds)
         assertThat(received).isEqualTo("Hello")
@@ -90,7 +90,7 @@ class P2PMessagingTest : NodeBasedTest() {
             node.respondWith(node.info)
         }
         val serviceAddress = originatingNode.services.networkMapCache.run {
-            originatingNode.net.getAddressOfParty(getPartyInfo(getNotary(serviceName)!!)!!)
+            originatingNode.net.getAddressOfParty.Full(getPartyInfo(getNotary(serviceName)!!)!!)
         }
         val participatingNodes = HashSet<Any>()
         // Try several times so that we can be fairly sure that any node not participating is not due to Artemis' selection

@@ -4,7 +4,6 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.contracts.asset.Cash
 import net.corda.core.contracts.*
 import net.corda.core.crypto.Party
-import net.corda.core.crypto.StateParty
 import net.corda.core.crypto.keys
 import net.corda.core.crypto.toStringShort
 import net.corda.core.flows.FlowLogic
@@ -142,12 +141,12 @@ sealed class CashCommand {
      */
     class IssueCash(val amount: Amount<Currency>,
                     val issueRef: OpaqueBytes,
-                    val recipient: StateParty,
-                    val notary: Party) : CashCommand() {
+                    val recipient: Party.Anonymised,
+                    val notary: Party.Full) : CashCommand() {
         constructor(amount: Amount<Currency>,
                     issueRef: OpaqueBytes,
                     recipient: Party,
-                    notary: Party) : this(amount, issueRef, recipient.toState(), notary)
+                    notary: Party.Full) : this(amount, issueRef, recipient.toState(), notary)
     }
 
     /**
@@ -156,7 +155,7 @@ sealed class CashCommand {
      * @param amount the amount of currency to issue on to the ledger.
      * @param recipient the party to issue the cash to.
      */
-    class PayCash(val amount: Amount<Issued<Currency>>, val recipient: StateParty) : CashCommand() {
+    class PayCash(val amount: Amount<Issued<Currency>>, val recipient: Party.Anonymised) : CashCommand() {
         constructor(amount: Amount<Issued<Currency>>, recipient: Party) : this(amount, recipient.toState())
     }
 

@@ -90,7 +90,7 @@ object NotaryFlow {
      *
      * TODO: the notary service should only be able to see timestamp commands and inputs
      */
-    open class Service(val otherSide: Party,
+    open class Service(val otherSide: Party.Full,
                        val timestampChecker: TimestampChecker,
                        val uniquenessProvider: UniquenessProvider) : FlowLogic<Unit>() {
 

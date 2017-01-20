@@ -87,7 +87,7 @@ interface NetworkMapCache {
     fun getPartyInfo(party: Party): PartyInfo?
 
     /** Gets a notary identity by the given name. */
-    fun getNotary(name: String): Party? {
+    fun getNotary(name: String): Party.Full? {
         val notaryNode = notaryNodes.randomOrNull {
             it.advertisedServices.any { it.info.type.isSubTypeOf(ServiceType.notary) && it.info.name == name }
         }

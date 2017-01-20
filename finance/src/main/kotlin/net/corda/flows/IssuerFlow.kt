@@ -84,7 +84,7 @@ object IssuerFlow {
             val notaryParty = serviceHub.networkMapCache.notaryNodes[0].notaryIdentity
             // invoke Cash subflow to issue Asset
             progressTracker.currentStep = ISSUING
-            val bankOfCordaParty = serviceHub.myInfo.legalIdentity
+            val bankOfCordaParty = serviceHub.myInfo.legalIdentity.toState()
             try {
                 val issueCashFlow = CashFlow(CashCommand.IssueCash(amount, issuerPartyRef, bankOfCordaParty, notaryParty))
                 val resultIssue = subFlow(issueCashFlow)

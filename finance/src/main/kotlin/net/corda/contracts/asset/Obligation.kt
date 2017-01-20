@@ -190,7 +190,7 @@ class Obligation<P> : Contract {
                     "amount in settle command ${command.value.amount} matches settled total $totalAmountSettled" by (command.value.amount == totalAmountSettled)
                     "signatures are present from all obligors" by command.signers.containsAll(requiredSigners)
                     "there are no zero sized inputs" by inputs.none { it.amount.quantity == 0L }
-                    "at obligor ${obligor.name} the obligations after settlement balance" by
+                    "at obligor ${obligor} the obligations after settlement balance" by
                             (inputAmount == outputAmount + Amount(totalPenniesSettled, groupingKey))
                 }
                 return setOf(command.value)
@@ -460,7 +460,7 @@ class Obligation<P> : Contract {
                       issuanceDef: Terms<P>,
                       pennies: Long,
                       beneficiary: CompositeKey,
-                      notary: Party) {
+                      notary: Party.Full) {
         check(tx.inputStates().isEmpty())
         check(tx.outputStates().map { it.data }.sumObligationsOrNull<P>() == null)
         tx.addOutputState(State(Lifecycle.NORMAL, obligor, issuanceDef, pennies, beneficiary), notary)
@@ -469,7 +469,7 @@ class Obligation<P> : Contract {
 
     fun generatePaymentNetting(tx: TransactionBuilder,
                                issued: Issued<Obligation.Terms<P>>,
-                               notary: Party,
+                               notary: Party.Full,
                                vararg states: State<P>) {
         requireThat {
             "all states are in the normal lifecycle state " by (states.all { it.lifecycle == Lifecycle.NORMAL })
@@ -509,7 +509,7 @@ class Obligation<P> : Contract {
     fun generateSetLifecycle(tx: TransactionBuilder,
                              statesAndRefs: List<StateAndRef<State<P>>>,
                              lifecycle: Lifecycle,
-                             notary: Party) {
+                             notary: Party.Full) {
         val states = statesAndRefs.map { it.state.data }
         val issuanceDef = getTermsOrThrow(states)
         val existingLifecycle = when (lifecycle) {
@@ -545,7 +545,7 @@ class Obligation<P> : Contract {
                        statesAndRefs: Iterable<StateAndRef<State<P>>>,
                        assetStatesAndRefs: Iterable<StateAndRef<FungibleAsset<P>>>,
                        moveCommand: MoveCommand,
-                       notary: Party) {
+                       notary: Party.Full) {
         val states = statesAndRefs.map { it.state }
         val obligationIssuer = states.first().data.obligor
         val obligationOwner = states.first().data.beneficiary
@@ -711,7 +711,7 @@ infix fun <T> Obligation.State<T>.`issued by`(party: Party) = copy(obligor = par
 /** A randomly generated key. */
 val DUMMY_OBLIGATION_ISSUER_KEY by lazy { entropyToKeyPair(BigInteger.valueOf(10)) }
 /** A dummy, randomly generated issuer party by the name of "Snake Oil Issuer" */
-val DUMMY_OBLIGATION_ISSUER by lazy { Party("Snake Oil Issuer", DUMMY_OBLIGATION_ISSUER_KEY.public.composite) }
+val DUMMY_OBLIGATION_ISSUER by lazy { Party.Full("Snake Oil Issuer", DUMMY_OBLIGATION_ISSUER_KEY.public.composite) }
 
 val Issued<Currency>.OBLIGATION_DEF: Obligation.Terms<Currency>
     get() = Obligation.Terms(nonEmptySetOf(Cash().legalContractReference), nonEmptySetOf(this), TEST_TX_TIME)

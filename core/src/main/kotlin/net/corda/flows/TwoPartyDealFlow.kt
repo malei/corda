@@ -263,7 +263,7 @@ object TwoPartyDealFlow {
     }
 
 
-    data class AutoOffer(val notary: Party, val dealBeingOffered: DealState)
+    data class AutoOffer(val notary: Party.Full, val dealBeingOffered: DealState)
 
 
     /**

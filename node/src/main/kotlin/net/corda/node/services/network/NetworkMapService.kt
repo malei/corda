@@ -100,7 +100,7 @@ interface NetworkMapService {
 @ThreadSafe
 class InMemoryNetworkMapService(services: ServiceHubInternal) : AbstractNetworkMapService(services) {
 
-    override val registeredNodes: MutableMap<Party, NodeRegistrationInfo> = ConcurrentHashMap()
+    override val registeredNodes: MutableMap<Party.Full, NodeRegistrationInfo> = ConcurrentHashMap()
     override val subscribers = ThreadBox(mutableMapOf<SingleMessageRecipient, LastAcknowledgeInfo>())
 
     init {
@@ -117,7 +117,7 @@ class InMemoryNetworkMapService(services: ServiceHubInternal) : AbstractNetworkM
 @ThreadSafe
 abstract class AbstractNetworkMapService
 (services: ServiceHubInternal) : NetworkMapService, AbstractNodeService(services) {
-    protected abstract val registeredNodes: MutableMap<Party, NodeRegistrationInfo>
+    protected abstract val registeredNodes: MutableMap<Party.Full, NodeRegistrationInfo>
 
     // Map from subscriber address, to most recently acknowledged update map version.
     protected abstract val subscribers: ThreadBox<MutableMap<SingleMessageRecipient, LastAcknowledgeInfo>>

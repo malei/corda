@@ -57,7 +57,7 @@ object TwoPartyTradeFlow {
     data class SignaturesFromSeller(val sellerSig: DigitalSignature.WithKey,
                                     val notarySig: DigitalSignature.WithKey)
 
-    open class Seller(val otherParty: Party,
+    open class Seller(val otherParty: Party.Full,
                       val notaryNode: NodeInfo,
                       val assetToSell: StateAndRef<OwnableState>,
                       val price: Amount<Currency>,
@@ -158,8 +158,8 @@ object TwoPartyTradeFlow {
     }
 
     // DOCSTART 2
-    open class Buyer(val otherParty: Party,
-                     val notary: Party,
+    open class Buyer(val otherParty: Party.Full,
+                     val notary: Party.Full,
                      val acceptablePrice: Amount<Currency>,
                      val typeToBuy: Class<out OwnableState>) : FlowLogic<SignedTransaction>() {
 

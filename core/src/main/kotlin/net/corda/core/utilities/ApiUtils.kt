@@ -14,7 +14,7 @@ class ApiUtils(val rpc: CordaRPCOps) {
 
     /**
      * Get a party and then execute the passed function with the party public key as a parameter.
-     * Usage: withParty(key) { doSomethingWith(it) }
+     * Usage: withParty.Full(key) { doSomethingWith(it) }
      */
     fun withParty(partyKeyStr: String, notFound: (String) -> Response = defaultNotFound, found: (Party) -> Response): Response {
         val party = try {
