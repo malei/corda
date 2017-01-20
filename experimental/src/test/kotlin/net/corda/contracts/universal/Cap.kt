@@ -8,6 +8,7 @@ import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.testing.transaction
 import org.junit.Ignore
 import org.junit.Test
+import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 

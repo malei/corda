@@ -177,14 +177,18 @@ private class PrettyPrint(arr : Arrangement) {
             is And -> {
                 for (it in arr.arrangements) {
                     prettyPrint(it)
+                    println("")
                 }
             }
             is Continuation -> println("next()")
-            is Obligation -> {
-                print("${partyMap[arr.from.owningKey]}.gives( ${partyMap[arr.to.owningKey]}, ")
+            is Scale -> {
+                print("Scale(")
                 prettyPrint(arr.amount)
-                println(", ${arr.currency})")
+                print(", ")
+                prettyPrint(arr.arrangement)
+                println(")")
             }
+            is Obligation -> print("${partyMap[arr.from.owningKey]}.gives( ${partyMap[arr.to.owningKey]}, ${arr.amount}, ${arr.currency})")
             is Actions -> {
                 println("actions {")
                 indent {

@@ -92,11 +92,14 @@ class UniversalContract : Contract {
                 else -> throw NotImplementedError("eval - BigDecimal - " + expr.javaClass.name)
             }
 
-    fun validateImmediateTransfers(tx: TransactionForContract, arrangement: Arrangement): Arrangement = when (arrangement) {
-        is Obligation -> {
+    fun validateImmediateTransfers(tx: TransactionForContract, arrangement: Arrangement, scale: BigDecimal = BigDecimal.ONE): Arrangement = when (arrangement) {
+        is Scale -> {
             val amount = eval(tx, arrangement.amount)
-            requireThat { "transferred quantity is non-negative" by (amount >= BigDecimal.ZERO) }
-            Obligation(const(amount), arrangement.currency, arrangement.from, arrangement.to)
+            validateImmediateTransfers(tx, arrangement.arrangement, amount * scale)
+        }
+        is Obligation -> {
+            requireThat { "transferred quantity is non-negative" by (scale >= BigDecimal.ZERO) }
+            Obligation(arrangement.currency, arrangement.from, arrangement.to, arrangement.amount * scale)
         }
         is And -> And(arrangement.arrangements.map { validateImmediateTransfers(tx, it) }.toSet())
         else -> arrangement
@@ -145,7 +148,8 @@ class UniversalContract : Contract {
             when (arrangement) {
                 is And -> And(arrangement.arrangements.map { replaceStartEnd(it, start, end) }.toSet())
                 is Zero -> arrangement
-                is Obligation -> Obligation(replaceStartEnd(arrangement.amount, start, end), arrangement.currency, arrangement.from, arrangement.to)
+                is Scale -> Scale(replaceStartEnd(arrangement.amount, start, end), replaceStartEnd(arrangement.arrangement, start, end) )
+                is Obligation -> Obligation(arrangement.currency, arrangement.from, arrangement.to, arrangement.amount)
                 is Actions -> Actions(arrangement.actions.map { Action(it.name, replaceStartEnd(it.condition, start, end), replaceStartEnd(it.arrangement, start, end)) }.toSet())
                 is Continuation -> arrangement
                 else -> throw NotImplementedError("replaceStartEnd " + arrangement.javaClass.name)
@@ -156,6 +160,7 @@ class UniversalContract : Contract {
                 is Actions -> Actions(arrangement.actions.map { Action(it.name, it.condition, replaceNext(it.arrangement, nextReplacement)) }.toSet())
                 is And -> And(arrangement.arrangements.map { replaceNext(it, nextReplacement) }.toSet())
                 is Obligation -> arrangement
+                is Scale -> arrangement
                 is Zero -> arrangement
                 is Continuation -> nextReplacement
                 else -> throw NotImplementedError("replaceNext " + arrangement.javaClass.name)
@@ -172,6 +177,7 @@ class UniversalContract : Contract {
                         a.single()
                 }
                 is Obligation -> arrangement
+                is Scale -> arrangement
                 is Zero -> arrangement
                 is Continuation -> zero
                 else -> throw NotImplementedError("replaceNext " + arrangement.javaClass.name)
@@ -306,7 +312,8 @@ class UniversalContract : Contract {
             when (arr) {
                 is Zero -> arr
                 is And -> And(arr.arrangements.map { replaceFixing(tx, it, fixings, unusedFixings) }.toSet())
-                is Obligation -> Obligation(replaceFixing(tx, arr.amount, fixings, unusedFixings), arr.currency, arr.from, arr.to)
+                is Scale -> Scale(replaceFixing(tx, arr.amount, fixings, unusedFixings), arr.arrangement)
+                is Obligation -> Obligation(arr.currency, arr.from, arr.to, arr.amount)
                 is Actions -> Actions(arr.actions.map { Action(it.name, it.condition, replaceFixing(tx, it.arrangement, fixings, unusedFixings)) }.toSet())
                 is RollOut -> RollOut(arr.startDate, arr.endDate, arr.frequency, replaceFixing(tx, arr.template, fixings, unusedFixings))
                 is Continuation -> arr

@@ -27,6 +27,7 @@ private fun liablePartiesVisitor(arrangement: Arrangement): ImmutableSet<Composi
         when (arrangement) {
             is Zero -> ImmutableSet.of<CompositeKey>()
             is Obligation -> ImmutableSet.of(arrangement.from.owningKey)
+            is Scale -> liablePartiesVisitor(arrangement.arrangement)
             is And ->
                 arrangement.arrangements.fold(ImmutableSet.builder<CompositeKey>(), { builder, k -> builder.addAll(liablePartiesVisitor(k)) }).build()
             is Actions ->
@@ -54,6 +55,7 @@ private fun involvedPartiesVisitor(arrangement: Arrangement): ImmutableSet<Party
         when (arrangement) {
             is Zero -> ImmutableSet.of<Party>()
             is Obligation -> ImmutableSet.of(arrangement.from, arrangement.to)
+            is Scale -> involvedPartiesVisitor(arrangement.arrangement)
             is RollOut -> involvedPartiesVisitor(arrangement.template)
             is Continuation -> ImmutableSet.of<Party>()
             is And ->
@@ -88,9 +90,10 @@ fun replaceParty(action: Action, from: Party, to: Party): Action =
 
 fun replaceParty(arrangement: Arrangement, from: Party, to: Party): Arrangement = when (arrangement) {
     is Zero -> arrangement
-    is Obligation -> Obligation(arrangement.amount, arrangement.currency,
+    is Scale -> Scale( arrangement.amount, replaceParty(arrangement.arrangement, from, to) )
+    is Obligation -> Obligation(arrangement.currency,
             if (arrangement.from == from) to else arrangement.from,
-            if (arrangement.to == from) to else arrangement.to)
+            if (arrangement.to == from) to else arrangement.to, arrangement.amount)
     is And -> And(arrangement.arrangements.map { replaceParty(it, from, to) }.toSet())
     is Actions -> Actions(arrangement.actions.map { replaceParty(it, from, to) }.toSet())
     else -> throw IllegalArgumentException()
@@ -112,6 +115,7 @@ fun extractRemainder(arrangement: Arrangement, action: Action): Arrangement = wh
 fun actions(arrangement: Arrangement): Map<String, Action> = when (arrangement) {
     is Zero -> mapOf()
     is Obligation -> mapOf()
+    is Scale -> actions(arrangement.arrangement)
     is Actions -> arrangement.actions.map { it.name to it }.toMap()
     is And -> arrangement.arrangements.map { actions(it) }.fold(mutableMapOf()) { m, x ->
         x.forEach { entry ->
@@ -191,10 +195,16 @@ fun debugCompare(arrLeft: Arrangement, arrRight: Arrangement) {
     if (arrLeft == arrRight) return
 
     when (arrLeft) {
+        is Scale -> {
+            if (arrRight is Scale) {
+                debugCompare(arrLeft.amount, arrRight.amount)
+                debugCompare(arrLeft.arrangement, arrRight.arrangement)
+            }
+        }
         is Obligation -> {
             if (arrRight is Obligation) {
 
-                debugCompare(arrLeft.amount, arrRight.amount)
+                assert(arrLeft.amount == arrRight.amount)
                 debugCompare(arrLeft.from, arrRight.from)
                 debugCompare(arrLeft.to, arrRight.to)
                 return

@@ -68,13 +68,13 @@ open class ContractBuilder {
     }
 
     fun Party.owes(beneficiary: Party, amount: BigDecimal, currency: Currency): Obligation {
-        val c = Obligation(const(amount), currency, this, beneficiary)
+        val c = Obligation(currency, this, beneficiary, amount)
         contracts.add(c)
         return c
     }
 
-    fun Party.owes(beneficiary: Party, amount: Perceivable<BigDecimal>, currency: Currency): Obligation {
-        val c = Obligation(amount, currency, this, beneficiary)
+    fun Party.owes(beneficiary: Party, amount: Perceivable<BigDecimal>, currency: Currency): Scale {
+        val c = Scale( amount, Obligation(currency, this, beneficiary))
         contracts.add(c)
         return c
     }
